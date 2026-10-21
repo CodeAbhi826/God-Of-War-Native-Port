@@ -185,7 +185,7 @@ void _vuFlushAll(VURegs* VU)
 	}
 }
 
-__fi void _vuTestPipes(VURegs* VU)
+__fi PS2X_FORCE_EMIT void _vuTestPipes(VURegs* VU)
 {
 	bool flushed;
 
@@ -295,7 +295,7 @@ static __fi void _vuTestALUStalls(VURegs* VU, _VURegsNum* VUregsn)
 	}
 }
 
-__fi void _vuTestUpperStalls(VURegs* VU, _VURegsNum* VUregsn)
+__fi PS2X_FORCE_EMIT void _vuTestUpperStalls(VURegs* VU, _VURegsNum* VUregsn)
 {
 	switch (VUregsn->pipe) {
 	case VUPIPE_FMAC: _vuTestFMACStalls(VU, VUregsn); break;
@@ -303,7 +303,7 @@ __fi void _vuTestUpperStalls(VURegs* VU, _VURegsNum* VUregsn)
 }
 
 
-__fi void _vuTestLowerStalls(VURegs* VU, _VURegsNum* VUregsn)
+__fi PS2X_FORCE_EMIT void _vuTestLowerStalls(VURegs* VU, _VURegsNum* VUregsn)
 {
 	switch (VUregsn->pipe)
 	{
@@ -314,7 +314,7 @@ __fi void _vuTestLowerStalls(VURegs* VU, _VURegsNum* VUregsn)
 	}
 }
 
-__fi void _vuClearFMAC(VURegs* VU)
+__fi PS2X_FORCE_EMIT void _vuClearFMAC(VURegs* VU)
 {
 	int i = VU->fmacwritepos;
 
@@ -399,14 +399,14 @@ static __fi void _vuAddEFUStalls(VURegs* VU, _VURegsNum* VUregsn)
 		_vuEFUAdd(VU, VUregsn->cycles);
 }
 
-__fi void _vuAddUpperStalls(VURegs* VU, _VURegsNum* VUregsn)
+__fi PS2X_FORCE_EMIT void _vuAddUpperStalls(VURegs* VU, _VURegsNum* VUregsn)
 {
 	switch (VUregsn->pipe) {
 	case VUPIPE_FMAC: _vuAddFMACStalls(VU, VUregsn, true); break;
 	}
 }
 
-__fi void _vuAddLowerStalls(VURegs* VU, _VURegsNum* VUregsn)
+__fi PS2X_FORCE_EMIT void _vuAddLowerStalls(VURegs* VU, _VURegsNum* VUregsn)
 {
 	switch (VUregsn->pipe)
 	{

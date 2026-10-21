@@ -42,6 +42,16 @@ struct alignas(16) s128 { s64 lo, hi; };
 #endif
 #define __ri inline
 
+// Clang does not emit an out-of-line copy of an `inline` function that is only
+// used from another translation unit. These VU helpers are declared `extern`
+// in VUops.h/VUflags.h, so keep the inline copy for hot paths and force an
+// external symbol for the linker.
+#if defined(__GNUC__) || defined(__clang__)
+#define PS2X_FORCE_EMIT __attribute__((used))
+#else
+#define PS2X_FORCE_EMIT
+#endif
+
 #define pxFail(msg) ((void)0)
 #define pxAssert(cond) ((void)0)
 #define pxAssume(cond) ((void)0)

@@ -46,42 +46,42 @@ static __ri u32 VU_MAC_UPDATE( int shift, VURegs * VU, float f )
 	}
 }
 
-__fi u32 VU_MACx_UPDATE(VURegs * VU, float x)
+__fi PS2X_FORCE_EMIT u32 VU_MACx_UPDATE(VURegs * VU, float x)
 {
 	return VU_MAC_UPDATE(3, VU, x);
 }
 
-__fi u32 VU_MACy_UPDATE(VURegs * VU, float y)
+__fi PS2X_FORCE_EMIT u32 VU_MACy_UPDATE(VURegs * VU, float y)
 {
 	return VU_MAC_UPDATE(2, VU, y);
 }
 
-__fi u32 VU_MACz_UPDATE(VURegs * VU, float z)
+__fi PS2X_FORCE_EMIT u32 VU_MACz_UPDATE(VURegs * VU, float z)
 {
 	return VU_MAC_UPDATE(1, VU, z);
 }
 
-__fi u32 VU_MACw_UPDATE(VURegs * VU, float w)
+__fi PS2X_FORCE_EMIT u32 VU_MACw_UPDATE(VURegs * VU, float w)
 {
 	return VU_MAC_UPDATE(0, VU, w);
 }
 
-__fi void VU_MACx_CLEAR(VURegs * VU)
+__fi PS2X_FORCE_EMIT void VU_MACx_CLEAR(VURegs * VU)
 {
 	VU->macflag&= ~(0x1111<<3);
 }
 
-__fi void VU_MACy_CLEAR(VURegs * VU)
+__fi PS2X_FORCE_EMIT void VU_MACy_CLEAR(VURegs * VU)
 {
 	VU->macflag&= ~(0x1111<<2);
 }
 
-__fi void VU_MACz_CLEAR(VURegs * VU)
+__fi PS2X_FORCE_EMIT void VU_MACz_CLEAR(VURegs * VU)
 {
 	VU->macflag&= ~(0x1111<<1);
 }
 
-__fi void VU_MACw_CLEAR(VURegs * VU)
+__fi PS2X_FORCE_EMIT void VU_MACw_CLEAR(VURegs * VU)
 {
 	VU->macflag&= ~(0x1111<<0);
 }
