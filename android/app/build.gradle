@@ -32,7 +32,9 @@ android {
         }
 
         ndk {
-            abiFilters 'arm64-v8a', 'x86_64'
+            // The A20 and every realistic Mali target are arm64. Keeping the
+            // CI build single-ABI cuts the NDK build time roughly in half.
+            abiFilters 'arm64-v8a'
         }
     }
 

@@ -1,0 +1,53 @@
+name: android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [android]
+    paths:
+      - 'android/**'
+      - 'ps2xRuntime/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/android.yml'
+
+jobs:
+  build-runner-apk:
+    name: arm64 runner APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK, CMake and platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps2x-runner-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
