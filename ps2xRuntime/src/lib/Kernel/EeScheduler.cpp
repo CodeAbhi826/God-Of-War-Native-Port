@@ -407,6 +407,15 @@ void EeScheduler::accountCycles(uint32_t cycles) noexcept
     }
 }
 
+uint64_t EeScheduler::advanceQuietRepeated(uint32_t cycles, uint64_t maxCount) noexcept
+{
+    (void)cycles;
+    (void)maxCount;
+    // Android has no EeCheckpointClock quiet path yet. Returning zero keeps the generated
+    // countdown loop's original per-iteration checkpoint accounting and timing.
+    return 0u;
+}
+
 uint64_t EeScheduler::catchUpToHost(uint64_t maxCycles) noexcept
 {
     uint64_t target = 0u;

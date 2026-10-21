@@ -284,6 +284,10 @@ public:
     // host clock (a scheduled event's host deadline has passed but its guest cycle is not reached), account the
     // missing cycles (at most maxCycles) so guest time, EE timers and the IOP keep real time. Returns cycles added.
     uint64_t catchUpToHost(uint64_t maxCycles) noexcept;
+    // GOW-Port: the upstream Switch scheduler has a quiet-checkpoint fast path that can take several
+    // countdown iterations at once. This runtime still performs a full checkpoint on every generated
+    // back edge, so there is nothing to skip here. Keep the entry point for the shared USA overrides.
+    uint64_t advanceQuietRepeated(uint32_t cycles, uint64_t maxCount) noexcept;
     [[nodiscard]] bool isExecutingGuest() const noexcept;
 
     // Kernel object API. All calls except postEvent/requestStop execute on the
