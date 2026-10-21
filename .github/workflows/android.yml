@@ -24,12 +24,26 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # The ubuntu-latest image already carries the Android SDK; the
+      # setup-android action currently fails on the removed "tools" package,
+      # so configure the preinstalled SDK directly.
+      - name: Configure Android SDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --version
 
       - name: Install NDK, CMake and platform
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install \
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install \
             "platforms;android-34" \
             "build-tools;34.0.0" \
             "ndk;28.2.13676358" \
