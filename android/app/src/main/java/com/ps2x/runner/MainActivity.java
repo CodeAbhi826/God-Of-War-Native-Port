@@ -185,7 +185,7 @@ public final class MainActivity extends Activity {
             return read == pvd.length
                     && pvd[1] == 'C' && pvd[2] == 'D' && pvd[3] == '0'
                     && pvd[4] == '0' && pvd[5] == '1';
-        } catch (ErrnoException e) {
+        } catch (ErrnoException | IOException e) {
             return false;
         }
     }
