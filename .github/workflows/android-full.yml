@@ -1,0 +1,202 @@
+name: android-full-usa
+
+# Full, game-code build. The public repository has free Actions minutes; the
+# private builder only supplies the user's own ELF and the pad2 helper. The
+# generated C++ is produced on the runner and is never committed or uploaded as
+# source; only the final APK is kept as a temporary workflow artifact.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: android-full-usa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: full arm64 release APK (USA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout public android branch
+        uses: actions/checkout@v4
+        with:
+          ref: android
+          path: src
+
+      - name: Checkout public port map
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: public-main
+
+      - name: Checkout private builder (ELF only)
+        uses: actions/checkout@v4
+        with:
+          repository: CodeAbhi826/gow-engine-builder
+          ssh-key: ${{ secrets.PRIVATE_BUILDER_DEPLOY_KEY }}
+          path: builder
+
+      - name: Locate guest ELF
+        id: elf
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELF=""
+          SERIAL=""
+          FLAVOR=""
+          OVERRIDES=""
+          TOML=""
+          if [ -f builder/game/SCUS_973.99 ]; then
+            ELF=builder/game/SCUS_973.99
+            SERIAL=SCUS_973.99
+            FLAVOR=usa
+            OVERRIDES=overrides-usa
+            TOML=gow-usa.toml
+          elif [ -f builder/game/SCES_531.33 ]; then
+            ELF=builder/game/SCES_531.33
+            SERIAL=SCES_531.33
+            FLAVOR=pal
+            OVERRIDES=overrides
+            TOML=gow.toml
+          else
+            echo "::error::No ELF in the private builder. Upload your own dump first."
+            exit 1
+          fi
+          echo "path=$ELF" >> "$GITHUB_OUTPUT"
+          echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
+          echo "flavor=$FLAVOR" >> "$GITHUB_OUTPUT"
+          echo "overrides=$OVERRIDES" >> "$GITHUB_OUTPUT"
+          echo "toml=$TOML" >> "$GITHUB_OUTPUT"
+          stat -c '%n: %s bytes' "$ELF"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libelf-dev zlib1g-dev
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: gow-android-full-${{ steps.elf.outputs.serial }}
+          max-size: 2G
+
+      - name: Copy port map and tools
+        run: |
+          set -euo pipefail
+          cp -a public-main/port src/port
+          cp -a public-main/tools src/tools
+
+      - name: Build ps2_recomp
+        working-directory: src
+        run: |
+          set -euo pipefail
+          cmake -S . -B recomp-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPS2X_BUILD_RECOMP=ON \
+            -DPS2X_BUILD_RUNTIME=OFF \
+            -DPS2X_BUILD_ANALYZER=OFF \
+            -DPS2X_BUILD_TEST=OFF \
+            -DPS2X_BUILD_STUDIO=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build recomp-build --target ps2_recomp -j"$(nproc)"
+
+      - name: Recompile guest ELF
+        working-directory: src
+        run: |
+          set -euo pipefail
+          mkdir -p disc
+          cp "../${{ steps.elf.outputs.path }}" "disc/${{ steps.elf.outputs.serial }}"
+          rm -rf port/output
+          TOML="port/${{ steps.elf.outputs.toml }}"
+          if [ "${{ steps.elf.outputs.flavor }}" = "usa" ]; then
+            # The public config was generated for PAL; the function map matches
+            # the USA override set, so derive the USA input path from it.
+            sed 's#disc/SCES_531\.33#disc/SCUS_973.99#' port/gow.toml > "$TOML"
+          fi
+          ./recomp-build/ps2xRecomp/ps2_recomp "$TOML" | tee recomp.log
+          test -f port/output/register_functions.cpp
+          echo "generated sources: $(find port/output -maxdepth 1 -name '*.cpp' | wc -l)"
+          tail -n 20 recomp.log
+
+      - name: Sync generated code into the runner
+        working-directory: src
+        run: |
+          set -euo pipefail
+          rm -f ps2xRuntime/src/runner/*.cpp
+          cp port/output/*.cpp ps2xRuntime/src/runner/
+          if compgen -G "port/output/*.h" > /dev/null; then
+            cp port/output/*.h ps2xRuntime/include/
+          fi
+          cp port/${{ steps.elf.outputs.overrides }}/*.cpp ps2xRuntime/src/runner/
+          cp port/switch/gow_gs_replay.h ps2xRuntime/include/
+          cp ../builder/helpers/gow_pad2_packet.h ps2xRuntime/include/
+          find ps2xRuntime/src/runner -maxdepth 1 -name '*.cpp' | wc -l
+          ls -lh ps2xRuntime/src/runner/register_functions.cpp
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configure Android SDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --version
+
+      - name: Install NDK, CMake and platform
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        working-directory: src/android
+        run: |
+          set -euo pipefail
+          gradle --no-daemon assembleRelease \
+            -Pps2xGameSerial=${{ steps.elf.outputs.serial }} \
+            -Pps2xBootElf=/storage/emulated/0/Android/data/com.ps2x.runner/files/boot.elf \
+            --stacktrace
+
+      - name: Verify APK contents
+        working-directory: src/android
+        run: |
+          set -euo pipefail
+          APK="$(ls app/build/outputs/apk/release/*.apk | head -n 1)"
+          echo "APK=$APK"
+          unzip -Z1 "$APK" | tee /tmp/apk-contents.txt
+          if grep -Ei '(^|/)(SCES_531|SCUS_973|GODOFWAR|PART[12]\.PAK|.*\.(iso|elf|irx|pak))$' /tmp/apk-contents.txt; then
+            echo "::error::APK contains game data"
+            exit 1
+          fi
+          sha256sum "$APK" | tee "$APK.sha256"
+
+      - name: Upload temporary APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gow-android-${{ steps.elf.outputs.serial }}-release
+          path: |
+            src/android/app/build/outputs/apk/release/*.apk
+            src/android/app/build/outputs/apk/release/*.sha256
+          if-no-files-found: error
+          retention-days: 1
