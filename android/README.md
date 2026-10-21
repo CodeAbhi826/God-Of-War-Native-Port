@@ -1,36 +1,45 @@
 # Android runner
 
-## Requirements
+The Android application is a Java launcher (`MainActivity`) plus a
+`NativeActivity` (`GameActivity`). The launcher uses the Storage Access
+Framework to open the user's ISO, checks the ISO9660 primary volume descriptor,
+and passes the open file descriptor and the boot-ELF path to the native runner.
+The ISO is read in place; only the boot ELF is extracted into the app's private
+files directory.
 
-- Android Studio (recommended) or a local Gradle 8.7+ / JDK 17 install
-- Android SDK 34 + NDK (installed automatically by Android Studio on first sync)
-- CMake 3.22.1 from the SDK (Android Studio installs it on demand)
+The project-level [README](../README.md) documents the build model, the
+requirements and the release policy. The short version:
 
-## Building
+- The public tree builds a shell APK. It contains no game data and no generated
+  game code.
+- A full build needs the user's own `SCUS_973.99` ELF in the private builder and
+  is produced by the `android-full-usa` GitHub Actions workflow.
+- The APK is `arm64-v8a` only, targets Android 9+ and Vulkan 1.1.
 
-Option A — Android Studio: open the `android/` folder and run the `app` configuration.
-Option B — command line (no wrapper is committed; generate it once):
+## Build
+
+The CI uses JDK 17, Android SDK 34, NDK 28.2.13676358, CMake 3.22.1 and Gradle
+8.9. The shell APK is built by `.github/workflows/android.yml`; the full USA
+build is `.github/workflows/android-full.yml`.
+
+For reference, the Gradle command is:
 
 ```sh
 cd android
-gradle wrapper --gradle-version 8.9
-./gradlew assembleRelease
+gradle assembleRelease \
+  -Pps2xGameSerial=SCUS_973.99 \
+  -Pps2xBootElf=/storage/emulated/0/Android/data/com.ps2x.runner/files/boot.elf
 ```
 
 APK output: `android/app/build/outputs/apk/release/app-release.apk`.
 
-## Running a game
+## Logs
 
-Since there is no argv on Android, the guest ELF path comes from
-`PS2X_DEFAULT_BOOT_ELF`, set via the `ps2xBootElf` Gradle property
-(`android/gradle.properties`, or `-Pps2xBootElf=...` on the command line).
-
+The native runtime redirects its standard output and error to logcat. Use:
 
 ```sh
-adb install app/build/outputs/apk/release/app-release.apk
-adb shell mkdir -p /storage/emulated/0/Android/data/com.ps2x.runner/files
-adb push "path/to/game/." /storage/emulated/0/Android/data/com.ps2x.runner/files/
+adb logcat -s ps2x ps2x-vk
 ```
 
-Logs: raylib output goes to logcat (`adb logcat -s raylib`); runtime `std::cout`/`cerr`
-output is not redirected to logcat yet.
+The app does not require root to run. Root on the maintainer's test device is
+used only for installation and diagnostics.

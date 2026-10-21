@@ -1,202 +1,262 @@
-## PS2Recomp: PlayStation 2 Static Recompiler (Experimental)
+<div align="center">
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/JQ8mawxUEf)
+# God of War Native Port
 
-Also check our [WIKI](https://github.com/ran-j/PS2Recomp/wiki)
+**An unofficial static recompilation of God of War (PlayStation 2, 2005) for Android**
 
+[License: GPL-3.0](LICENSE) · [Releases](../../releases)
 
-This project statically recompiles PS2 ELF binaries into C++ and provides a runtime to execute the generated code.
+</div>
 
-### Modules
+> [!IMPORTANT]
+> This is a non-commercial fan project for interoperability and preservation research. It is **not** affiliated
+> with, endorsed by or sponsored by Sony Interactive Entertainment, Santa Monica Studio or any other rights
+> holder. **This repository contains no game files, no game assets and no generated game code.** The APKs in
+> Releases contain the game's code translated to ARM64, but none of its data, textures, audio, video, models,
+> artwork or logos. They do nothing without a disc image that you extract from your own legally obtained copy of
+> the game. See [Legal](#legal).
 
-* `ps2xAnalyzer`: scans ELF/functions and writes TOML config (`stubs`, `skip`, instruction patches).
-* `ps2xRecomp`: reads TOML + ELF, decodes R5900 instructions, and generates C++ output.
-* `ps2xRuntime`: hosts memory, function registration, syscall dispatch, and hardware stubs.
-* `ps2xIOP`: R3000A IRX execution, a virtual IOP kernel, and generic HLE fallbacks.
+## Table of contents
 
-### Features
+- [Overview](#overview)
+- [How it works](#how-it-works)
+- [Project status](#project-status)
+- [Requirements](#requirements)
+- [Building from source](#building-from-source)
+- [Running on Android](#running-on-android)
+- [Repository layout](#repository-layout)
+- [Known issues and roadmap](#known-issues-and-roadmap)
+- [Contributing](#contributing)
+- [Credits](#credits)
+- [Legal](#legal)
+- [License](#license)
 
-* Translates MIPS R5900 instructions to C++ code
-* PS2-specific MMI and VU0 macro support.
-* Single-file or multi-file output.
-* Configurable stubs, skips, and instruction patches.
-* Instruction-driven syscall handling.
+## Overview
 
-### How It Works
-PS2Recomp works by:
+God of War Native Port translates the MIPS R5900 code of the PlayStation 2 executable of **God of War (2005)**
+into C++ ahead of time and compiles it into a native ARM64 Android application. There is no interpreter or JIT
+for the game's EE code: the game's own instructions become native code, and the PS2 hardware around them is
+provided by a small runtime.
 
-* Parsing a PS2 ELF file to extract functions, symbols, and relocations
-* Decoding the MIPS R5900 instructions in each function
-* Translating those instructions to equivalent C++ code
-* Generating a runtime that can execute the recompiled code
+The project is built on [PS2Recomp](https://github.com/ran-j/PS2Recomp) and on the God of War port work by
+[Waffle565](https://github.com/Waffle565/God-Of-War-Native-Port). The Android application reads the game directly
+from an ISO selected by the user; it never copies the disc image into the app and never bundles game data.
 
-The translated code is very literal, with each MIPS instruction mapping to a C++ operation. For example, `addiu $r4, $r4, 0x20` becomes `ctx->r4 = ADD32(ctx->r4, 0X20);`.
+The current test device is a rooted Samsung Galaxy A20 (SM-A205F): 2× Cortex-A73 at 1.6 GHz, Mali-G71 MP2,
+3 GB RAM, Android 14 and Vulkan 1.1.
 
-### Current Behavior
+## How it works
 
-* `stubs` entries generate wrappers that call known runtime syscall/stub handlers by name.
-* `stubs` also supports address bindings with `handler@0xADDRESS` for stripped games (for example `sceCdRead@0x00123456`).
-* Address bindings also support generic return handlers for triage: `ret0`, `ret1`, `reta0`.
-* Recompiler now tries relocation-symbol auto-binding at callsites (`J/JAL`) before raw address dispatch; when relocation symbol is known (for example `sceCdRead`), it can call runtime handlers without manual address mapping.
-* Recompiler discovers additional internal static entry targets and emits `entry_...` wrappers for those addresses.
-* For unresolved static `J/JAL` sites, generated code falls back to `runtime->lookupFunction(0x...)`.
-* `skip` entries are not recompiled and generate explicit `ps2_stubs::TODO_NAMED(...)` wrappers.
-* Recompiled `SYSCALL` now calls `runtime->handleSyscall(...)` with the encoded syscall immediate.
-* Runtime syscall dispatch tries encoded syscall ID first, then falls back to `$v1`.
+| Part | How it runs |
+|---|---|
+| Game code (EE, R5900) | Recompiled ahead of time: the MIPS instructions of the game ELF become C++, built into a native library. There is no EE interpreter or JIT. |
+| VU0 / VU1 | VU0 macro instructions are translated with the EE code. VU1 microprograms are handled by the runtime and are being moved to ahead-of-time, NEON-friendly translations for phone performance. |
+| IOP (R3000A) | The original IRX modules run on a small virtual IOP with HLE fallbacks for the CD/DVD, SIF, file and pad services. |
+| GPU (GS) | A native Vulkan 1.1 backend is being implemented for the PS2 Graphics Synthesizer. The desktop port uses a native OpenGL backend; Android will not use a GLES compatibility path. |
+| Disc | The Android launcher opens the user's ISO through the Storage Access Framework. The native runtime reads it in place through `/proc/self/fd/<fd>` and extracts only the small boot ELF (about 2 MB) into the app's private files directory. |
+| Audio, input, video | Pad2 input is bridged to the host; audio and FMV playback are part of the ongoing runtime work. |
+| Android shell | A Java launcher (`MainActivity`) checks the ISO9660 volume and starts a `NativeActivity` (`GameActivity`). The native runner lives in `libps2EntryRunner.so`. |
 
-### Requirements
+The public source tree contains the recompiler, the runtime, the Android shell and the game-specific hooks. The
+game ELF itself is not public. A maintainer's private builder holds only the user's own ELF and the function map
+needed to generate the game code; the generated C++ is produced by CI and is never committed.
 
-* CMake 3.20+
-* C++20 compiler (currently tested mainly with MSVC)
-* SSE4/AVX host support for some vector paths
+## Project status
 
-### Build
+**Work in progress. There is no playable release yet.**
 
-```bash
-git clone --recurse-submodules https://github.com/ran-j/PS2Recomp.git
-cd PS2Recomp
+What is already in place:
 
-cmake -S . -B out/build
-cmake --build out/build --config Debug
+- An ARM64 Android application that builds entirely in GitHub Actions.
+- A Storage Access Framework ISO picker, ISO9660 volume validation, and in-place disc reads.
+- Extraction of the boot ELF from the user's ISO into the app's private files directory.
+- A native runtime and recompiler that build for `arm64-v8a` with the Android NDK.
+- A Vulkan 1.1 device and extension probe on the stock Mali driver, with results in `adb logcat -s ps2x-vk`.
+- The USA game configuration and the game-specific override hooks for `SCUS-97399`.
+
+The current blockers are:
+
+- **A GS renderer for Android.** The desktop OpenGL backend is not available on Android, and the Vulkan backend
+  is still being implemented. Without it the game cannot present a frame.
+- **VU1 performance.** The interpreter is correct enough for bring-up, but the phone needs ahead-of-time
+  microprograms or a dedicated VU1 thread to reach a useful frame rate.
+- **Audio, FMV and save-game integration.**
+
+The target is a stable 20+ fps on the A20's Mali-G71 MP2 at native resolution, with lower internal resolution and
+frame pacing as fallbacks. Performance numbers will be published only after the renderer is complete and the
+game is measured on the device.
+
+## Requirements
+
+**To play (when a playable build is published)**
+
+- Android 9.0 (API 28) or later, ARM64 device.
+- A GPU and driver with Vulkan 1.1 or later. The stock driver is supported; custom drivers are not required.
+- 3 GB of RAM or more (4 GB recommended).
+- About 9 GB of free storage for the ISO (the USA disc is 8.5 GB).
+- Your own copy of **God of War (USA)**, serial `SCUS-97399`, dumped from your own disc.
+
+The PAL release (`SCES-53133`) is the fallback target; the public configuration currently uses the USA map.
+
+**To build**
+
+- GitHub Actions is the supported build environment. The project is developed without local Android compiles.
+- For the public shell APK: the workflow in `.github/workflows/android.yml`.
+- For a full game build: a private builder repository containing your own ELF, plus the
+  `android-full-usa` workflow in this repository. The private builder is connected with a read-only deploy key
+  stored as the `PRIVATE_BUILDER_DEPLOY_KEY` secret.
+- Toolchain used by CI: Ubuntu, JDK 17, Android SDK 34, NDK 28.2.13676358, CMake 3.22.1 and Gradle 8.9.
+
+## Building from source
+
+The public repository alone produces the **shell APK**: the Android application, the runtime and an empty
+function table. That build is useful for checking the UI, the ISO picker and the Vulkan probe, but it cannot run
+the game.
+
+A full build needs the game's ELF and a function map. They are deliberately not in this repository:
+
+1. Create a private copy of the builder layout used by the maintainer. It needs:
+   - `game/SCUS_973.99` — the boot ELF extracted from your own USA ISO;
+   - `port-usa/gow-usa.toml` and `port-usa/functions-usa.csv` — the USA recompiler configuration;
+   - `helpers/gow_pad2_packet.h` — the libpad2 packet helper.
+2. Add the public key of a read-only deploy key to the private builder, and store the private key in this
+   repository as `PRIVATE_BUILDER_DEPLOY_KEY`.
+3. In **Actions → android-full-usa → Run workflow**, start the build. It:
+   - checks out this repository's `android` branch and the public `port/` map from `main`;
+   - checks out the private builder and uses only its ELF, USA map and pad2 helper;
+   - builds `ps2_recomp` on the runner;
+   - recompiles the ELF into C++ (the generated code is not committed);
+   - syncs the generated code and the USA overrides into the runner;
+   - builds the APK with `-Pps2xGameSerial=SCUS_973.99`;
+   - verifies that the APK contains no ISO, ELF, IRX or PAK files;
+   - uploads the APK as a temporary workflow artifact for device testing.
+4. Verify the APK on a device before publishing it. The release notes must include the original
+   own-copy notice and the SHA-256 of the APK.
+
+Do not commit generated code, the ELF, the ISO or extracted game files. Do not attach them to issues or pull
+requests.
+
+The shell build is:
+
+```sh
+cd android
+gradle assembleRelease
 ```
 
-### Usage
+The APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
 
-Preferred workflow for retail or stripped games:
+## Running on Android
 
-1. Open the ELF in Ghidra.
-2. Run `ps2xRecomp/tools/ghidra/ExportPS2Functions.java`.
-3. Use the exported TOML and CSV map.
-4. Recompile with the exported TOML:
+A playable build will appear in [Releases](../../releases) when the GS renderer and the boot path pass device
+testing. To run a build:
 
-```bash
-./ps2_recomp config.toml
-```
+1. Install the APK:
 
-Fallback workflow for quick local experiments or ELFs with debug symbol :
+   ```sh
+   adb install -r app-release.apk
+   ```
 
-```bash
-./ps2_analyzer your_game.elf config.toml
-```
+   Builds signed with different keys cannot update each other; uninstall the previous copy first.
 
-See the [Ghidra Workflow](ps2xAnalyzer/Readme.md#3-ghidra-integration-for-retail-and-stripped-games-preferred) for ghdira instructions.
+2. Start **God of War**. The launcher asks for your disc image. Choose your own `God of War (USA).iso` and grant
+   the file access the picker requests.
+3. The launcher checks the ISO9660 volume, writes the disc descriptor and the boot-ELF path, and starts the game.
+   The ISO stays where it is; only the boot ELF is extracted into the app's private files directory.
+4. For diagnostics:
 
-Then build generated output and link with `ps2xRuntime`.
+   ```sh
+   adb logcat -s ps2x ps2x-vk
+   ```
 
-### Configuration
+The APK is `arm64-v8a` only. It does not include a custom Vulkan driver and does not require root for normal
+play. Root is used only on the maintainer's test device for logs and installation.
 
-Main fields in `config.toml`:
+## Repository layout
 
-* `general.input`: source ELF path.
-* `general.ghidra_output`: recommended function map CSV exported from Ghidra.
-* `general.output`: generated C++ output folder.
-* `general.single_file_output`: one combined cpp or one file per function.
-* `general.low_memory_mode`: reduce peak output-generation memory by avoiding retained disassembly strings and forcing serial output generation. Generated instruction comments are still emitted; disassembly text is produced while writing each output file instead of being kept in memory.
-* `general.output_worker_threads`: number of output-generation workers (clamped to nproc * 2). A positive value uses exactly that many workers. `0` uses `nproc - 1` when at least two hardware threads are available, otherwise serial output generation. `1` forces serial output generation.
-* `general.patch_syscalls`: apply configured patches to `SYSCALL` instructions (`false` recommended).
-* `general.patch_cop0`: apply configured patches to COP0 instructions.
-* `general.patch_cache`: apply configured patches to CACHE instructions.
-* `general.stubs`: names to force as stubs. Also accepts `handler@0xADDRESS` to bind a stripped function address directly to a runtime syscall/stub handler. Includes generic handlers `ret0`, `ret1`, `reta0`.
-* `general.skip`: names to force as skipped wrappers.
-* `patches.instructions`: raw instruction replacements by address.
+| Path | Contents |
+|---|---|
+| `android/` | The Android application: launcher, `NativeActivity`, manifest and Gradle configuration |
+| `ps2xRuntime/` | Guest memory, EE/VU execution, syscalls and hardware stubs, GS frontend and native backends |
+| `ps2xRecomp/` | MIPS R5900 to C++ code generator |
+| `ps2xAnalyzer/` | ELF analysis and Ghidra function-map workflow |
+| `ps2xIOP/` | R3000A IRX execution and IOP HLE services |
+| `port/` | Recompiler configuration, function maps and game-specific overrides (on `main`) |
+| `.github/workflows/` | Public shell build and the full USA build |
+| `tools/` | Disc, analysis and development helpers |
 
-Address binding for stripped ELFs:
+## Known issues and roadmap
 
-* Use `handler@0xADDRESS` inside `general.stubs` to map a stripped function start directly to a runtime handler.
-* Example: `sceCdRead@0x00123456` binds function start `0x00123456` to `ps2_stubs::sceCdRead(...)`.
-* Generic temporary handlers are available: `ret0@0xADDR`, `ret1@0xADDR`, `reta0@0xADDR`.
-* Before manual binding, prefer recompilation from a Ghidra-exported TOML/CSV first. The extra boundaries and synthetic entry points are usually more important than manual early triage.
-* The address must be the function start in that exact ELF build.
-* Addresses are not portable across different games/regions/builds.
-* The handler name must exist in runtime call lists (`PS2_SYSCALL_LIST` or `PS2_STUB_LIST`).
+- **No GS renderer on Android yet.** This is the main blocker. The backend must cover the PS2's destination-alpha
+  test, wrapping/soft blend modes and Z-in-color-memory without sampling an attachment being written; Mali lacks
+  `VK_EXT_rasterization_order_attachment_access`, so some effects need two-pass or ping-pong paths.
+- **VU1 performance.** The interpreter is the current fallback; AOT microprograms and a dedicated VU1 thread are
+  planned. The VU1 is the largest CPU cost in the game's scenes.
+- **Audio and FMV.** The IOP/SPU2 path and the MPEG decoder are not complete.
+- **Save games and memory cards.** Not implemented on Android yet.
+- **Mali driver coverage.** The target is Vulkan 1.1 with no dynamic rendering, no timeline semaphores, no
+  descriptor indexing and at most four bound descriptor sets.
+- **No custom driver packaging.** The stock driver is the baseline; a Turnip-style package may be added later for
+  Adreno devices, not for the A20.
 
-Example:
+## Contributing
 
-```toml
-# stripped function binding by address:
-stubs = ["sceCdRead@0x00123456", "SifLoadModule@0x00127890"]
-# temporary return handlers:
-stubs = ["ret0@0x001D9410", "ret1@0x001D5BC8", "reta0@0x0024B7C0"]
-# mixed example:
-stubs = ["printf", "sceCdRead@0x00123456", "SifLoadModule@0x00127890"] 
-```
+Bug reports and pull requests are welcome. Please:
 
-### Runtime
+- never attach or link game files, ISOs, ELFs, IRX modules, generated code or unofficial builds;
+- do not ask for game files or builds: those issues are closed;
+- describe your device (model, GPU, Android version, Vulkan version) and attach the launcher diagnostics or
+  `adb logcat` output when reporting a problem;
+- keep changes to the runtime, renderer and Android shell in the public tree; game-specific data stays in the
+  private builder.
 
-To execute the recompiled code.
+## Credits
 
-`ps2xRuntime` currently provides:
+This project exists thanks to the work of:
 
-* Guest memory model and function dispatch table.
-* Some syscall dispatcher with common kernel IDs.
-* Basic GS/VU/file/system stubs.
-* Foundation to expand and port your game.
-* `ps2xIOP` execution of original IRX modules with generic HLE fallbacks.
+- **[Waffle565/God-Of-War-Native-Port](https://github.com/Waffle565/God-Of-War-Native-Port)**: the God of War
+  recompilation, the runtime and the game-specific hooks this Android port is based on.
+- **[PS2Recomp](https://github.com/ran-j/PS2Recomp)** by ran-j and contributors: the PS2 static recompiler and
+  runtime.
+- **[PCSX2](https://pcsx2.net)**: the VU, GS and IOP research that much of the runtime is derived from.
+- **[KIexster/god-of-war-recomp](https://github.com/KIexster/god-of-war-recomp)**: the USA function map and
+  recompiler configuration used by the private builder.
+- **[raylib](https://www.raylib.com)**: the host window, input and audio layer on desktop and the Android glue.
+- **[victorgbd/NFSMW-Recompiled-Mobile](https://github.com/victorgbd/NFSMW-Recompiled-Mobile)**: the public-APK
+  distribution model this release follows.
+- The authors of the libraries listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-See [IOP emulation](ps2xIOP/README.md) for module execution and the service boundary.
+God of War was created by Santa Monica Studio and published by Sony Computer Entertainment. This is an
+unofficial fan project; the original game and its trademarks belong to their respective owners.
 
-### Game Override Hooks
+## Legal
 
-Game overrides are runtime-side, build-scoped patch modules.
+- **No game content in the repository.** This repository contains only original source code and open-source code
+  under the licenses listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). It does not contain, and will
+  never contain, the game's executable, data files, assets, audio, video, artwork, logos or the C++ generated
+  from the game.
+- **Releases.** The APKs published in Releases contain the game's code translated to ARM64, but none of its data
+  files, assets, audio, video, artwork or logos. They do nothing without a disc image the user extracts from
+  their own copy. They are free of charge and are provided only for owners of the game.
+- **Own copy required.** You must own a legitimate copy of God of War (USA), serial `SCUS-97399`, and use your
+  own dump. This project does not provide, and does not explain how to obtain, copies of the game.
+- **Do not redistribute the APK.** The APK contains translated game code. Download it only from this
+  repository's Releases for your own devices; do not mirror it, publish it elsewhere or include it in another
+  product.
+- **No Sony code.** This project does not include code from the PlayStation 2 SDK or any other proprietary Sony
+  software.
+- **Trademarks.** God of War, PlayStation and PS2 are trademarks of Sony Interactive Entertainment. All other
+  trademarks belong to their respective owners. They are used only to identify the game and platform this
+  software is compatible with; no endorsement is implied.
+- **Not for commercial use or piracy.** Do not sell this project or builds of it, and do not use it to
+  distribute or play unauthorized copies of the game.
+- **Takedown requests.** If you are a rights holder and believe something in this repository or its Releases
+  infringes your rights, please open an issue or contact the maintainer, and it will be reviewed and removed
+  promptly.
+- **No warranty.** This software is provided "as is", without warranty of any kind, as stated in sections 15
+  and 16 of the GPL-3.0. Use it at your own risk.
 
-A game override is C++ code that runs during `loadELF` and can replace EE function bindings by address for one specific game build. IOP RPC/DMA behavior is handled by the `ps2xIOP` emulator and its runtime transport. This is separate from recompilation output and separate from global runtime stubs/syscalls.
+## License
 
-API:
-
-* Header: `ps2xRuntime/include/game_overrides.h`
-* Register macro: `PS2_REGISTER_GAME_OVERRIDE(name, elfName, entry, crc32, applyFn)`
-* Direct bind helper: `ps2_game_overrides::bindAddressHandler(runtime, addr, "handler")`
-
-Use Game Override modules when:
-
-* You need per-game/per-build routing or patches without polluting global behavior.
-* You need to bind many addresses, or install custom replacement logic for a specific title.
-
-#### Recommended Iteration Loop
-
-1. Run with minimal config and no aggressive skipping.
-2. Fix hard blockers first (`function not found`, syscall TODO, critical IO stubs).
-3. Use temporary return stubs only to classify call importance.
-4. Promote temporary fixes to real implementations.
-5. Move per-game hacks into game overrides keyed by ELF metadata.
-6. Re-test from cold boot after each batch.
-
-### Describing Your Game Project
-
-A game project built with PS2Recomp can describe itself in a `.recomp.json` file at the root of its repository. Lists of recomp and decomp projects, such as [recomp.board](https://recomp.fyi), read that file instead of guessing the game, system and status from the README.
-
-> [!NOTE]
-> This file is optional: PS2Recomp does not read it and works the same without it. `.recomp.json` and recomp.board are third-party projects; the PS2Recomp developers have no ties to them.
-
-Starter file:
-
-```json
-{
-  "$schema": "https://recomp.fyi/schema/v1.json",
-  "game": "<title as it shipped>",
-  "system": "PS2",
-  "type": "recomp",
-  "toolchain": "PS2Recomp",
-  "status": "in-progress",
-  "original": { "region": "USA", "serial": "SLUS-20312" }
-}
-```
-
-* `original` is the release a user must own. On retail discs the ELF is named after the serial (`SLUS_203.12` is `SLUS-20312`), and the prefix gives the region: `SLUS`/`SCUS` USA, `SLES`/`SCES` Europe, `SLPS`/`SLPM`/`SCPS` Japan.
-* `status` is one of `exploring`, `in-progress`, `playable`, `released`, `complete`, `paused`. Edit it when the project moves on: a stale status is worse than none.
-* Never put a game file, or a link to one, in the file.
-
-Other fields (Wikidata item, target platforms, maintainers, links, what help is wanted) and the JSON Schema are in the [specification](https://recomp.fyi/spec).
-
-### Limitations
- 
-* Performance is very bad for VU and GS
-* Hardware emulation is partial and many paths are stubbed.
-
-###  Acknowledgments
-
-* Inspired by N64Recomp
-* Uses ELFIO for ELF parsing
-* Uses toml11 for TOML parsing
-* Uses fmt for string formatting
-* Reference for runtime PCSX2
+God of War Native Port is free software, licensed under the
+[GNU General Public License v3.0](LICENSE). Third-party components keep their own licenses, listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "God of War",
+  "system": "PS2",
+  "type": "recomp",
+  "toolchain": "PS2Recomp",
+  "status": "in-progress",
+  "original": {
+    "region": "USA",
+    "serial": "SCUS-97399"
+  },
+  "platforms": [
+    "Android"
+  ],
+  "maintainers": [
+    "CodeAbhi826"
+  ],
+  "links": {
+    "source": "https://github.com/CodeAbhi826/God-Of-War-Native-Port"
+  }
+}
