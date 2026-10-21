@@ -25,6 +25,8 @@ void ps2InstallEePageWatch(PS2Runtime &runtime);
 #include <thread>
 #include <cstdio>
 #include <cstring>
+
+void ps2AndroidVkProbe();
 #endif
 
 namespace
@@ -172,6 +174,7 @@ int main(int argc, char *argv[])
 {
 #if defined(__ANDROID__)
     redirectStdioToLogcat();
+    ps2AndroidVkProbe();
 #endif
     setupTerminateLogger();
 

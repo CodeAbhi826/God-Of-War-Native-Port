@@ -560,6 +560,7 @@ endif()
 target_include_directories(ps2_runtime PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/Kernel
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/ee_ref
 )
 
 target_link_libraries(ps2_runtime PUBLIC ps2_host_backend ffmpeg libmpeg2 ps2_iop)
@@ -716,6 +717,7 @@ endif()
 
 if(PS2X_IS_ANDROID)
     target_sources(ps2EntryRunner PRIVATE src/lib/ps2_android_runtime.cpp)
+    target_link_libraries(ps2EntryRunner PRIVATE vulkan)
 endif()
 
 install(TARGETS ps2_runtime ps2EntryRunner
