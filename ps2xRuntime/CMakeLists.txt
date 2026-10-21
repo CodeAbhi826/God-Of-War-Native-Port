@@ -52,6 +52,7 @@ set(PS2X_VITA_APP_NAME "PS2 Retro X" CACHE STRING "Display name for the Vita bub
 set(PS2X_VITA_TITLEID "RANJ00001" CACHE STRING "9-character Vita title id")
 set(PS2X_VITA_VERSION "01.00" CACHE STRING "Vita app version")
 set(PS2X_DEFAULT_BOOT_ELF "" CACHE STRING "Guest ELF path passed directly to main() when argv is unavailable")
+set(PS2X_GAME_SERIAL "" CACHE STRING "Guest ELF serial accepted by the Android disc picker (e.g. SCES_531.33); empty: try PAL and USA")
 
 if(PS2X_IS_VITA)
     if(NOT DEFINED ENV{VITASDK})
@@ -528,6 +529,12 @@ endif()
 if(PS2X_DEFAULT_BOOT_ELF_DEFINE)
     target_compile_definitions(ps2EntryRunner PRIVATE
         PS2X_DEFAULT_BOOT_ELF="${PS2X_DEFAULT_BOOT_ELF_DEFINE}"
+    )
+endif()
+
+if(PS2X_GAME_SERIAL)
+    target_compile_definitions(ps2EntryRunner PRIVATE
+        PS2X_GAME_SERIAL="${PS2X_GAME_SERIAL}"
     )
 endif()
 

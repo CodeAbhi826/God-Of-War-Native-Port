@@ -18,6 +18,10 @@ void ps2InstallEePageWatch(PS2Runtime &runtime);
 #include <exception>
 #include <algorithm>
 #include <cstdlib>
+#include <cstdint>
+#include <fstream>
+#include <optional>
+#include <vector>
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -25,6 +29,8 @@ void ps2InstallEePageWatch(PS2Runtime &runtime);
 #include <thread>
 #include <cstdio>
 #include <cstring>
+
+#include "ps2x/iop/disc_source.h"
 
 void ps2AndroidVkProbe();
 #endif
@@ -168,6 +174,129 @@ namespace
         throw std::runtime_error("Unable to determine executable path. Pass the guest ELF as argv[1] or define PS2X_DEFAULT_BOOT_ELF.");
 #endif
     }
+
+#if defined(__ANDROID__)
+    constexpr const char *kAndroidGameConfigName = "game_paths.txt";
+
+    struct AndroidGamePaths
+    {
+        std::string isoPath;
+        std::filesystem::path bootElf;
+    };
+
+    // MainActivity writes this file after the user picks an ISO. The descriptor number is valid because both
+    // activities live in the same process and the launcher keeps the ParcelFileDescriptor open.
+    bool readAndroidGamePaths(AndroidGamePaths &out)
+    {
+#if defined(PS2X_DEFAULT_BOOT_ELF)
+        const std::filesystem::path configPath =
+            std::filesystem::path(PS2X_DEFAULT_BOOT_ELF).parent_path() / kAndroidGameConfigName;
+#else
+        const std::filesystem::path configPath =
+            std::filesystem::path("/data/user/0/com.ps2x.runner/files") / kAndroidGameConfigName;
+#endif
+        std::ifstream config(configPath);
+        if (!config)
+            return false;
+
+        int isoFd = -1;
+        std::filesystem::path bootElf;
+        std::string line;
+        while (std::getline(config, line))
+        {
+            const std::size_t separator = line.find('=');
+            if (separator == std::string::npos)
+                continue;
+            const std::string key = line.substr(0, separator);
+            const std::string value = line.substr(separator + 1);
+            if (key == "iso_fd")
+                isoFd = std::atoi(value.c_str());
+            else if (key == "boot_elf")
+                bootElf = std::filesystem::u8path(value);
+        }
+        if (isoFd < 0 || bootElf.empty())
+        {
+            std::cerr << "[android] invalid disc config " << configPath << std::endl;
+            return false;
+        }
+
+        out.isoPath = "/proc/self/fd/" + std::to_string(isoFd);
+        out.bootElf = std::move(bootElf);
+        std::cout << "[android] disc config " << configPath << " (fd " << isoFd << ")" << std::endl;
+        return true;
+    }
+
+    // Extracts only the guest ELF from the user's ISO (about 2 MB); the ISO itself stays in place and is
+    // handed to the CDVD layer through the descriptor path.
+    std::string extractAndroidBootElf(const std::string &isoPath, const std::filesystem::path &bootElf)
+    {
+        auto disc = ps2x::iop::DiscSource::openImage(std::filesystem::u8path(isoPath));
+        if (!disc)
+        {
+            std::cerr << "[android] cannot open ISO9660 image " << isoPath << std::endl;
+            return {};
+        }
+
+        std::vector<std::string> candidates;
+#if defined(PS2X_GAME_SERIAL)
+        candidates.emplace_back(std::string("cdrom0:\\") + PS2X_GAME_SERIAL);
+#else
+        candidates.emplace_back("cdrom0:\\SCES_531.33");
+        candidates.emplace_back("cdrom0:\\SCUS_973.99");
+#endif
+
+        std::optional<ps2x::iop::DiscSource::File> found;
+        for (const std::string &candidate : candidates)
+        {
+            found = disc->findFile(candidate);
+            if (found)
+                break;
+        }
+        if (!found)
+        {
+            std::cerr << "[android] no supported God of War ELF in " << isoPath << std::endl;
+            return {};
+        }
+
+        const std::size_t sectorSize = ps2x::iop::DiscSource::kSectorSize;
+        const std::size_t sectors = (static_cast<std::size_t>(found->size) + sectorSize - 1u) / sectorSize;
+        std::vector<std::uint8_t> bytes(sectors * sectorSize);
+        if (!disc->readSectors(found->lsn, static_cast<std::uint32_t>(sectors), bytes.data()))
+        {
+            std::cerr << "[android] failed reading " << found->name << " from " << isoPath << std::endl;
+            return {};
+        }
+
+        const std::filesystem::path temporary = bootElf.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                std::cerr << "[android] cannot write " << temporary << std::endl;
+                return {};
+            }
+            output.write(reinterpret_cast<const char *>(bytes.data()),
+                         static_cast<std::streamsize>(found->size));
+            if (!output)
+            {
+                std::cerr << "[android] failed writing " << temporary << std::endl;
+                return {};
+            }
+        }
+
+        std::error_code error;
+        std::filesystem::rename(temporary, bootElf, error);
+        if (error)
+        {
+            std::cerr << "[android] cannot install " << bootElf << ": " << error.message() << std::endl;
+            return {};
+        }
+
+        std::cout << "[android] extracted " << found->name << " (" << found->size << " bytes) to "
+                  << bootElf << std::endl;
+        return found->name;
+    }
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -180,10 +309,40 @@ int main(int argc, char *argv[])
 
     try
     {
-        std::filesystem::path pathObj = getExecutablePath(argc, argv);
+        std::filesystem::path pathObj;
+        std::string elfName;
+        bool hasIsoPaths = false;
+        PS2Runtime::IoPaths isoIoPaths;
+
+#if defined(__ANDROID__)
+        AndroidGamePaths androidPaths;
+        if (readAndroidGamePaths(androidPaths))
+        {
+            const std::string extracted = extractAndroidBootElf(androidPaths.isoPath, androidPaths.bootElf);
+            if (!extracted.empty())
+            {
+                pathObj = androidPaths.bootElf;
+                elfName = extracted;
+                isoIoPaths.elfPath = pathObj;
+                isoIoPaths.elfDirectory = pathObj.parent_path();
+                isoIoPaths.hostRoot = isoIoPaths.elfDirectory;
+                isoIoPaths.cdRoot = isoIoPaths.elfDirectory;
+                isoIoPaths.mcRoot = isoIoPaths.elfDirectory / "mc0";
+                isoIoPaths.cdImage = androidPaths.isoPath;
+                hasIsoPaths = true;
+            }
+        }
+        if (!hasIsoPaths)
+        {
+            pathObj = getExecutablePath(argc, argv);
+            elfName = pathObj.filename().string();
+        }
+#else
+        pathObj = getExecutablePath(argc, argv);
+        elfName = pathObj.filename().string();
+#endif
 
         std::string filePathStr = pathObj.string();
-        std::string elfName = pathObj.filename().string();
         std::string normalizedId = normalizeGameId(elfName);
 
         std::string windowTitle = "PS2-Recomp | ";
@@ -202,6 +361,10 @@ int main(int argc, char *argv[])
         }
 
         PS2Runtime runtime;
+        if (hasIsoPaths)
+        {
+            PS2Runtime::setIoPaths(isoIoPaths);
+        }
 #if defined(PS2X_ENABLE_DEBUG_UI) && !defined(PLATFORM_VITA)
         // This hook is to prevent leak rlimgui deps to recompiler etc
         PS2DebugPanel debugPanel;

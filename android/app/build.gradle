@@ -3,12 +3,20 @@ plugins {
 }
 
 // Override with: gradlew assembleRelease -Pps2xBootElf=/absolute/path/on/device.elf
-def ps2xBootElf = project.findProperty('ps2xBootElf') ?: '/storage/emulated/0/Android/data/com.ps2x.runner/files/game.elf'
+def ps2xBootElf = project.findProperty('ps2xBootElf')
+        ?: '/storage/emulated/0/Android/data/com.ps2x.runner/files/boot.elf'
+// Set for a private full build, e.g. -Pps2xGameSerial=SCES_531.33. Empty accepts PAL or USA.
+def ps2xGameSerial = project.findProperty('ps2xGameSerial') ?: ''
 
 android {
     namespace 'com.ps2x.runner'
     compileSdk 34
     ndkVersion '28.2.13676358'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 
     defaultConfig {
         applicationId 'com.ps2x.runner'
@@ -26,7 +34,8 @@ android {
                         '-DPS2X_ENABLE_SCCACHE=OFF',
                         '-DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=32',
                         '-DANDROID_CPP_FEATURES=rtti exceptions',
-                        "-DPS2X_DEFAULT_BOOT_ELF=${ps2xBootElf}"
+                        "-DPS2X_DEFAULT_BOOT_ELF=${ps2xBootElf}",
+                        "-DPS2X_GAME_SERIAL=${ps2xGameSerial}"
                 targets 'ps2EntryRunner'
             }
         }

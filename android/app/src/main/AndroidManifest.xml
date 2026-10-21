@@ -2,25 +2,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="PS2 Recomp"
-        android:hasCode="false"
-        android:isGame="true">
+        android:label="God of War"
+        android:hasCode="true"
+        android:isGame="true"
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- Disc picker. The APK contains no game data. -->
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Native renderer. Started by MainActivity once an ISO is selected. -->
+        <activity
+            android:name=".GameActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation"
-            android:screenOrientation="landscape"
-            android:exported="true">
+            android:exported="false"
+            android:screenOrientation="landscape">
 
             <!-- Runner shared library built by ps2xRuntime/CMakeLists.txt -->
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="ps2EntryRunner" />
-
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity>
     </application>
 
