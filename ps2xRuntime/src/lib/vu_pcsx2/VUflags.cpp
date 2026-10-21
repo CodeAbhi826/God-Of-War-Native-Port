@@ -86,7 +86,7 @@ __fi PS2X_FORCE_EMIT void VU_MACw_CLEAR(VURegs * VU)
 	VU->macflag&= ~(0x1111<<0);
 }
 
-__ri void VU_STAT_UPDATE(VURegs * VU) {
+__ri PS2X_FORCE_EMIT void VU_STAT_UPDATE(VURegs * VU) {
 	int newflag = 0 ;
 	if (VU->macflag & 0x000F) newflag = 0x1;
 	if (VU->macflag & 0x00F0) newflag |= 0x2;
