@@ -112,11 +112,8 @@ void ps2AndroidVkProbe()
                 std::strcmp(extension.extensionName, VK_KHR_MAINTENANCE3_EXTENSION_NAME) == 0 ||
                 std::strcmp(extension.extensionName, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME) == 0 ||
                 std::strcmp(extension.extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) == 0 ||
-                std::strcmp(extension.extensionName, VK_EXT_DEPTH_CLAMP_EXTENSION_NAME) == 0
-#ifdef VK_EXT_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_EXTENSION_NAME
-                || std::strcmp(extension.extensionName, VK_EXT_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_EXTENSION_NAME) == 0
-#endif
-                ;
+                std::strcmp(extension.extensionName, "VK_EXT_depth_clamp") == 0 ||
+                std::strcmp(extension.extensionName, "VK_EXT_rasterization_order_attachment_access") == 0;
             if (interesting)
             {
                 __android_log_print(ANDROID_LOG_INFO, kLogTag, "  %s (rev %u)", extension.extensionName, extension.specVersion);
