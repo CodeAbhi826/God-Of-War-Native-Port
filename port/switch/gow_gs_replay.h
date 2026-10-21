@@ -37,8 +37,9 @@ namespace gow_gs_replay
             if(!text) return true;
             double parsed=0;
             const char *end=text+std::strlen(text);
-            const auto result=std::from_chars(text,end,parsed);
-            if(result.ec!=std::errc{} || result.ptr!=end || !std::isfinite(parsed) ||
+            char *parseEnd=nullptr;
+            parsed=std::strtod(text,&parseEnd);
+            if(parseEnd!=end || parseEnd==text || !std::isfinite(parsed) ||
                parsed<minimum || parsed>maximum) return false;
             value=parsed; return true;
         };
