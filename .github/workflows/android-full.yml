@@ -89,6 +89,8 @@ jobs:
           set -euo pipefail
           cp -a public-main/port src/port
           cp -a public-main/tools src/tools
+          cp builder/port-usa/gow-usa.toml src/port/gow-usa.toml
+          cp builder/port-usa/functions-usa.csv src/port/functions-usa.csv
 
       - name: Build ps2_recomp
         working-directory: src
@@ -113,11 +115,7 @@ jobs:
           cp "../${{ steps.elf.outputs.path }}" "disc/${{ steps.elf.outputs.serial }}"
           rm -rf port/output
           TOML="port/${{ steps.elf.outputs.toml }}"
-          if [ "${{ steps.elf.outputs.flavor }}" = "usa" ]; then
-            # The public config was generated for PAL; the function map matches
-            # the USA override set, so derive the USA input path from it.
-            sed 's#disc/SCES_531\.33#disc/SCUS_973.99#' port/gow.toml > "$TOML"
-          fi
+          test -f "$TOML"
           ./recomp-build/ps2xRecomp/ps2_recomp "$TOML" | tee recomp.log
           test -f port/output/register_functions.cpp
           echo "generated sources: $(find port/output -maxdepth 1 -name '*.cpp' | wc -l)"
