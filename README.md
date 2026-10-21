@@ -72,6 +72,7 @@ What is already in place:
 - Extraction of the boot ELF from the user's ISO into the app's private files directory.
 - A native runtime and recompiler that build for `arm64-v8a` with the Android NDK.
 - A Vulkan 1.1 device and extension probe on the stock Mali driver, with results in `adb logcat -s ps2x-vk`.
+- A verified full USA build on the A20: the APK installs, opens the ISO, extracts `SCUS_973.99` and executes the generated game code. It currently reaches the GS/DMA wait without presenting a frame because the Android GS backend is still missing.
 - The USA game configuration and the game-specific override hooks for `SCUS-97399`.
 
 The current blockers are:
