@@ -449,18 +449,6 @@ add_library(ps2_runtime STATIC
     src/lib/gs/gpu/gs_gl.cpp
     src/lib/gs/gpu/gs_hw_backend.cpp
     src/lib/gs/gs_cpu_backend.cpp # GOW-Port: Android fallback / reference rasteriser (GPL-3.0).
-    # GOW-Port: SDL3-GPU Vulkan GS backend, adapted from DQ8-Recompiled (GPL-3.0).
-    src/lib/gs/gfx/gs/gs_state.cpp
-    src/lib/gs/gfx/gs/gs_transfer.cpp
-    src/lib/gs/gfx/gs/gs_vram.cpp
-    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_backend.cpp
-    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_device.cpp
-    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_display.cpp
-    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_input.cpp
-    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_targets.cpp
-    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_textures.cpp
-    src/lib/gs/gfx/sdlgpu_host_stubs.cpp
-
 src/lib/gs/gpu/gs_texture_store.cpp
     src/lib/ps2_iop_host.cpp
     src/lib/ps2_memory.cpp
@@ -489,6 +477,24 @@ src/lib/gs/gpu/gs_texture_store.cpp
     src/lib/vu/ps2_vu1_lower.cpp
     src/lib/games_database.cpp
 )
+
+# GOW-Port: SDL3-GPU Vulkan GS backend, adapted from DQ8-Recompiled (GPL-3.0).
+# It needs the SDL3 headers fetched above, which only exist for Android; the
+# desktop build renders through the OpenGL backend (gpu/gs_gl.cpp).
+if(PS2X_IS_ANDROID)
+    target_sources(ps2_runtime PRIVATE
+        src/lib/gs/gfx/gs/gs_state.cpp
+        src/lib/gs/gfx/gs/gs_transfer.cpp
+        src/lib/gs/gfx/gs/gs_vram.cpp
+        src/lib/gs/gfx/backends/sdlgpu/sdlgpu_backend.cpp
+        src/lib/gs/gfx/backends/sdlgpu/sdlgpu_device.cpp
+        src/lib/gs/gfx/backends/sdlgpu/sdlgpu_display.cpp
+        src/lib/gs/gfx/backends/sdlgpu/sdlgpu_input.cpp
+        src/lib/gs/gfx/backends/sdlgpu/sdlgpu_targets.cpp
+        src/lib/gs/gfx/backends/sdlgpu/sdlgpu_textures.cpp
+        src/lib/gs/gfx/sdlgpu_host_stubs.cpp
+    )
+endif()
 
 if(PS2X_ENABLE_RUNTIME_LOGS)
     target_compile_definitions(ps2_runtime PUBLIC
