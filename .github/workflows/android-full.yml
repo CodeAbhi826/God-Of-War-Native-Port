@@ -76,7 +76,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libelf-dev zlib1g-dev
+          sudo apt-get install -y ninja-build libelf-dev zlib1g-dev glslang-tools
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2

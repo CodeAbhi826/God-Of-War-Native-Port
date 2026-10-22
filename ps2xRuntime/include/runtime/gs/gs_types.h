@@ -294,14 +294,25 @@ struct GSPresentationRequest
     bool forceReadback = false;
 };
 
+enum class GSPresentationMode : uint8_t
+{
+    // The backend downloaded the composed picture into pixels.
+    HostPixels,
+    // The backend presented directly into its own window/swapchain.
+    BackendNative,
+};
+
 struct PresentationFrame
 {
     std::vector<uint8_t> pixels;
     uint32_t width = 0;
     uint32_t height = 0;
+    // Bytes between rows in pixels; zero means tightly packed RGBA8.
+    uint32_t rowPitchBytes = 0;
     uint32_t displayFbp = 0;
     uint32_t sourceFbp = 0;
     bool usedPreferred = false;
+    GSPresentationMode mode = GSPresentationMode::HostPixels;
 
     explicit operator bool() const
     {

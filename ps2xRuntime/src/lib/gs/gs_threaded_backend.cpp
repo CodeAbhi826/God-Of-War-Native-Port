@@ -3,6 +3,7 @@
 #include "runtime/gs/gs_threaded_backend.h"
 #include "runtime/gs/gs_hw_backend.h"
 #include "runtime/gs/gs_cpu_backend.h"
+#include "gfx/backends/sdlgpu/sdlgpu_backend.h"
 #include "runtime/gs/gs_shared_present.h"
 #include "gs_inventory.h"
 #include "ThreadPriority.h"
@@ -16,6 +17,7 @@
 #endif
 #include <cstring>
 #include <cstdio>
+#include <string>
 #if defined(USE_SSE2NEON)
 #include "sse2neon.h"
 #else

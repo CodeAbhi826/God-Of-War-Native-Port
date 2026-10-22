@@ -101,7 +101,7 @@ else()
         set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
         set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
         set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
-        set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
+        set(SDL_JOYSTICK ON CACHE BOOL "" FORCE)
         set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
         set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
         set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
@@ -449,6 +449,17 @@ add_library(ps2_runtime STATIC
     src/lib/gs/gpu/gs_gl.cpp
     src/lib/gs/gpu/gs_hw_backend.cpp
     src/lib/gs/gs_cpu_backend.cpp # GOW-Port: Android fallback / reference rasteriser (GPL-3.0).
+    # GOW-Port: SDL3-GPU Vulkan GS backend, adapted from DQ8-Recompiled (GPL-3.0).
+    src/lib/gs/gfx/gs/gs_state.cpp
+    src/lib/gs/gfx/gs/gs_transfer.cpp
+    src/lib/gs/gfx/gs/gs_vram.cpp
+    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_backend.cpp
+    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_device.cpp
+    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_display.cpp
+    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_input.cpp
+    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_targets.cpp
+    src/lib/gs/gfx/backends/sdlgpu/sdlgpu_textures.cpp
+    src/lib/gs/gfx/sdlgpu_host_stubs.cpp
 
 src/lib/gs/gpu/gs_texture_store.cpp
     src/lib/ps2_iop_host.cpp
@@ -614,11 +625,26 @@ endif()
 
 target_include_directories(ps2_runtime PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/Kernel
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/ee_ref
 )
 
 target_link_libraries(ps2_runtime PUBLIC ps2_host_backend ffmpeg libmpeg2 ps2_iop)
+
+if(PS2X_IS_ANDROID)
+    if(TARGET SDL3::SDL3-static)
+        target_link_libraries(ps2_runtime PUBLIC SDL3::SDL3-static)
+    endif()
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Ps2xSdlGpuShaders.cmake)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_draw.vert STAGE vert SYMBOL kGsDrawVertSpirv)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_draw.frag STAGE frag SYMBOL kGsDrawFragSpirv)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_index8.frag STAGE frag SYMBOL kGsIndex8FragSpirv)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_local_copy.frag STAGE frag SYMBOL kGsLocalCopyFragSpirv)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_reinterpret.vert STAGE vert SYMBOL kGsReinterpretVertSpirv)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_reinterpret.frag STAGE frag SYMBOL kGsReinterpretFragSpirv)
+    dq8_add_shader(ps2_runtime SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/gs/gfx/shaders/gs_display.frag STAGE frag SYMBOL kGsDisplayFragSpirv)
+endif()
 if(WIN32)
     # GOW-Port: WGL propio del hilo GS.
     target_link_libraries(ps2_runtime PRIVATE opengl32 gdi32)
