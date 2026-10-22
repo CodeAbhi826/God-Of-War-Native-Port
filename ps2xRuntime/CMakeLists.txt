@@ -84,6 +84,53 @@ else()
     )
     FetchContent_MakeAvailable(raylib)
 
+    if(PS2X_IS_ANDROID)
+        # SDL3 GPU gives us a Vulkan-backed renderer. Only the GPU and its
+        # offscreen video driver are needed; SDL must not try to own the
+        # NativeActivity window or its Java activity.
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        set(SDL_TEST OFF CACHE BOOL "" FORCE)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+        set(SDL_VIDEO ON CACHE BOOL "" FORCE)
+        set(SDL_OFFSCREEN ON CACHE BOOL "" FORCE)
+        set(SDL_GPU ON CACHE BOOL "" FORCE)
+        set(SDL_VULKAN ON CACHE BOOL "" FORCE)
+        set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
+        set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+        set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
+        set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
+        set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
+        set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
+        set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
+        set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+        set(SDL_POWER OFF CACHE BOOL "" FORCE)
+        set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+        set(SDL_ANDROID_JAR OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            SDL3
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG release-3.4.18
+            GIT_SHALLOW TRUE
+            GIT_PROGRESS TRUE
+        )
+        FetchContent_MakeAvailable(SDL3)
+        # SDL's Android JNI_OnLoad registers org.libsdl.app.SDLActivity
+        # methods. This app is a plain NativeActivity and does not ship those
+        # Java classes, so keep the symbol out of the link entirely. The
+        # offscreen video driver needs no JNI.
+        if(TARGET SDL3-static)
+            target_compile_definitions(SDL3-static PRIVATE JNI_OnLoad=ps2x_SDL_JNI_OnLoad_unused)
+            get_target_property(PS2X_SDL_LINK_OPTIONS SDL3-static INTERFACE_LINK_OPTIONS)
+            if(PS2X_SDL_LINK_OPTIONS)
+                list(REMOVE_ITEM PS2X_SDL_LINK_OPTIONS "-Wl,-u,JNI_OnLoad")
+                set_target_properties(SDL3-static PROPERTIES INTERFACE_LINK_OPTIONS "${PS2X_SDL_LINK_OPTIONS}")
+            endif()
+        endif()
+    endif()
+
     if(PS2X_ENABLE_DEBUG_UI AND NOT PS2X_IS_ANDROID)
         FetchContent_Declare(
             imgui
@@ -726,6 +773,9 @@ endif()
 if(PS2X_IS_ANDROID)
     target_sources(ps2EntryRunner PRIVATE src/lib/ps2_android_runtime.cpp)
     target_link_libraries(ps2EntryRunner PRIVATE vulkan)
+    if(TARGET SDL3::SDL3-static)
+        target_link_libraries(ps2EntryRunner PRIVATE SDL3::SDL3-static)
+    endif()
 endif()
 
 install(TARGETS ps2_runtime ps2EntryRunner

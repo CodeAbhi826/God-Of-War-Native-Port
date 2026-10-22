@@ -8,6 +8,7 @@
 
 #include <android/log.h>
 #include <vulkan/vulkan.h>
+#include <SDL3/SDL.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -124,8 +125,39 @@ void ps2AndroidVkProbe()
     vkDestroyInstance(instance, nullptr);
 }
 
+void ps2AndroidSdlGpuProbe()
+{
+    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
+    {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "SDL_InitSubSystem(video) failed: %s", SDL_GetError());
+        return;
+    }
+    const char *videoDriver = SDL_GetCurrentVideoDriver();
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL video driver: %s", videoDriver ? videoDriver : "(null)");
+
+    SDL_GPUDevice *device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, "vulkan");
+    if (!device)
+    {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "SDL_CreateGPUDevice(vulkan) failed: %s", SDL_GetError());
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        return;
+    }
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL GPU driver: %s", SDL_GetGPUDeviceDriver(device));
+    SDL_PropertiesID props = SDL_GetGPUDeviceProperties(device);
+    if (props)
+    {
+        const char *name = SDL_GetStringProperty(props, SDL_PROP_GPU_DEVICE_NAME_STRING, "(unknown)");
+        const char *driver = SDL_GetStringProperty(props, SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING, "(unknown)");
+        __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL GPU device: %s (%s)", name, driver);
+    }
+    SDL_DestroyGPUDevice(device);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
 #else
 
 void ps2AndroidVkProbe() {}
+void ps2AndroidSdlGpuProbe() {}
 
 #endif

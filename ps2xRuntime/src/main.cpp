@@ -33,6 +33,7 @@ void ps2InstallEePageWatch(PS2Runtime &runtime);
 #include "ps2x/iop/disc_source.h"
 
 void ps2AndroidVkProbe();
+void ps2AndroidSdlGpuProbe();
 #endif
 
 namespace
@@ -304,6 +305,7 @@ int main(int argc, char *argv[])
 #if defined(__ANDROID__)
     redirectStdioToLogcat();
     ps2AndroidVkProbe();
+    ps2AndroidSdlGpuProbe();
 #endif
     setupTerminateLogger();
 
