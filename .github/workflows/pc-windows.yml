@@ -159,7 +159,8 @@ jobs:
             -DPS2X_BUILD_TEST=OFF \
             -DPS2X_BUILD_STUDIO=OFF \
             -DPS2X_ENABLE_DEBUG_UI=OFF \
-            -DPS2X_SHOW_WINDOWS_CONSOLE=ON
+            -DPS2X_SHOW_WINDOWS_CONSOLE=ON \
+            -DPS2X_DESKTOP_PORTABLE=ON
           cmake --build pc-build --config Release --target ps2EntryRunner --parallel
 
       - name: Collect executable
