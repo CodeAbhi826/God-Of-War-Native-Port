@@ -2,6 +2,7 @@
 // Origen: PS2Recomp sotc-port, ac9efa070638ad3b3accd284de6f898d5ab271d1.
 #include "runtime/gs/gs_threaded_backend.h"
 #include "runtime/gs/gs_hw_backend.h"
+#include "runtime/gs/gs_cpu_backend.h"
 #include "runtime/gs/gs_shared_present.h"
 #include "gs_inventory.h"
 #include "ThreadPriority.h"
@@ -10,6 +11,9 @@
 #include <atomic>
 #include <algorithm>
 #include <cstdlib>
+#if defined(__ANDROID__)
+#include <sys/system_properties.h>
+#endif
 #include <cstring>
 #include <cstdio>
 #if defined(USE_SSE2NEON)
@@ -23,6 +27,14 @@ namespace
     constexpr size_t kPublishBytes = 64u * 1024u;
     constexpr size_t kMaxPendingChunks = 256u;
     std::atomic<bool> s_enabledByDefault{false};
+
+#if defined(__ANDROID__)
+    bool androidCpuGsRequested()
+    {
+        char value[PROP_VALUE_MAX] = {};
+        return __system_property_get("debug.ps2x.gs_cpu", value) > 0 && value[0] == '1';
+    }
+#endif
 
     bool discardDraws()
     {
@@ -87,6 +99,16 @@ GSThreadedBackend::~GSThreadedBackend()
 
 std::unique_ptr<GSRasterBackend> GSThreadedBackend::MakeDefault()
 {
+#if defined(__ANDROID__)
+    // GOW-Port: bring-up switch while the Vulkan renderer is being implemented.
+    // The OpenGL renderer has no Android context, so the CPU rasteriser is the
+    // only path that can produce frames on the device today.
+    if (androidCpuGsRequested())
+    {
+        std::fprintf(stderr, "[gs] Android CPU fallback selected\n");
+        return std::make_unique<GSThreadedBackend>(std::make_unique<GSCpuBackend>());
+    }
+#endif
     // GOW-Port: the native render-target renderer is the only GS renderer (no VRAM-emulating rasteriser).
     return std::make_unique<GSThreadedBackend>(std::make_unique<GSHwBackend>());
 }

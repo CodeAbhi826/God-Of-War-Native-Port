@@ -401,6 +401,7 @@ add_library(ps2_runtime STATIC
     src/lib/gs/gs_swizzle.cpp
     src/lib/gs/gpu/gs_gl.cpp
     src/lib/gs/gpu/gs_hw_backend.cpp
+    src/lib/gs/gs_cpu_backend.cpp # GOW-Port: Android fallback / reference rasteriser (GPL-3.0).
 
 src/lib/gs/gpu/gs_texture_store.cpp
     src/lib/ps2_iop_host.cpp
