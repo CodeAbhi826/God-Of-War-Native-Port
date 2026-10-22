@@ -1,0 +1,191 @@
+name: pc-windows-mingw
+
+# Fast desktop reference build: the same Windows ps2EntryRunner.exe, but
+# cross-compiled with mingw-w64 + ccache on a Linux runner. GCC is considerably
+# faster than MSVC on this code base and ccache makes repeat builds cheap.
+# The executable is a plain Win64 binary (statically linked CRT) and runs under
+# Wine as well as on Windows. The MSVC workflow stays as the reference toolchain.
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: "Guest ELF region (auto picks USA if present)"
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - usa
+          - pal
+
+concurrency:
+  group: pc-windows-mingw-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: desktop windows x64 (mingw)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout public android branch
+        uses: actions/checkout@v4
+        with:
+          ref: android
+          path: src
+
+      - name: Checkout public port map
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: public-main
+
+      - name: Checkout private builder (ELF only)
+        uses: actions/checkout@v4
+        with:
+          repository: CodeAbhi826/gow-engine-builder
+          ssh-key: ${{ secrets.PRIVATE_BUILDER_DEPLOY_KEY }}
+          path: builder
+
+      - name: Locate guest ELF
+        id: elf
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELF=""
+          SERIAL=""
+          FLAVOR=""
+          OVERRIDES=""
+          TOML=""
+          REQUESTED="${{ inputs.flavor }}"
+          if [ -z "$REQUESTED" ]; then REQUESTED=auto; fi
+          if [ "$REQUESTED" != "pal" ] && [ -f builder/game/SCUS_973.99 ]; then
+            ELF=builder/game/SCUS_973.99
+            SERIAL=SCUS_973.99
+            FLAVOR=usa
+            OVERRIDES=overrides-usa
+            TOML=gow-usa.toml
+          elif [ "$REQUESTED" != "usa" ] && [ -f builder/game/SCES_531.33 ]; then
+            ELF=builder/game/SCES_531.33
+            SERIAL=SCES_531.33
+            FLAVOR=pal
+            OVERRIDES=overrides
+            TOML=gow.toml
+          else
+            echo "::error::Requested guest ELF is not in the private builder."
+            exit 1
+          fi
+          echo "path=$ELF" >> "$GITHUB_OUTPUT"
+          echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
+          echo "flavor=$FLAVOR" >> "$GITHUB_OUTPUT"
+          echo "overrides=$OVERRIDES" >> "$GITHUB_OUTPUT"
+          echo "toml=$TOML" >> "$GITHUB_OUTPUT"
+          stat -c '%n: %s bytes' "$ELF"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build mingw-w64 ccache zlib1g-dev
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: gow-pc-mingw-${{ steps.elf.outputs.serial }}
+          max-size: 2G
+
+      - name: Copy port map and tools
+        run: |
+          set -euo pipefail
+          cp -a public-main/port src/port
+          cp -a public-main/tools src/tools
+          cp builder/port-usa/gow-usa.toml src/port/gow-usa.toml
+          cp builder/port-usa/functions-usa.csv src/port/functions-usa.csv
+
+      - name: Build ps2_recomp (host)
+        working-directory: src
+        run: |
+          set -euo pipefail
+          cmake -S . -B recomp-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPS2X_BUILD_RECOMP=ON \
+            -DPS2X_BUILD_RUNTIME=OFF \
+            -DPS2X_BUILD_ANALYZER=OFF \
+            -DPS2X_BUILD_TEST=OFF \
+            -DPS2X_BUILD_STUDIO=OFF
+          cmake --build recomp-build --target ps2_recomp --parallel 4
+
+      - name: Recompile guest ELF
+        working-directory: src
+        run: |
+          set -euo pipefail
+          mkdir -p disc
+          cp "../${{ steps.elf.outputs.path }}" "disc/${{ steps.elf.outputs.serial }}"
+          rm -rf port/output
+          TOML="port/${{ steps.elf.outputs.toml }}"
+          test -f "$TOML"
+          ./recomp-build/ps2xRecomp/ps2_recomp "$TOML" | tee recomp.log
+          test -f port/output/register_functions.cpp
+          echo "generated sources: $(find port/output -maxdepth 1 -name '*.cpp' | wc -l)"
+
+      - name: Sync generated code into the runner
+        working-directory: src
+        run: |
+          set -euo pipefail
+          rm -f ps2xRuntime/src/runner/*.cpp
+          cp port/output/*.cpp ps2xRuntime/src/runner/
+          if compgen -G "port/output/*.h" > /dev/null; then
+            cp port/output/*.h ps2xRuntime/include/
+          fi
+          cp port/${{ steps.elf.outputs.overrides }}/*.cpp ps2xRuntime/src/runner/
+          cp port/switch/gow_gs_replay.h ps2xRuntime/include/
+          cp ../builder/helpers/gow_pad2_packet.h ps2xRuntime/include/
+          find ps2xRuntime/src/runner -maxdepth 1 -name '*.cpp' | wc -l
+
+      - name: Build desktop runner (mingw x86_64)
+        working-directory: src
+        run: |
+          set -euo pipefail
+          cmake -S . -B pc-build -G Ninja \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+            "-DCMAKE_EXE_LINKER_FLAGS=-static -static-libgcc -static-libstdc++" \
+            -DPS2X_BUILD_RECOMP=OFF \
+            -DPS2X_BUILD_RUNTIME=ON \
+            -DPS2X_BUILD_ANALYZER=OFF \
+            -DPS2X_BUILD_TEST=OFF \
+            -DPS2X_BUILD_STUDIO=OFF \
+            -DPS2X_ENABLE_DEBUG_UI=OFF \
+            -DPS2X_SHOW_WINDOWS_CONSOLE=ON \
+            -DPS2X_DESKTOP_PORTABLE=ON \
+            -DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=16
+          cmake --build pc-build --target ps2EntryRunner --parallel 4
+
+      - name: Collect executable
+        run: |
+          set -euo pipefail
+          EXE="$(find src/pc-build -name ps2EntryRunner.exe | head -n 1)"
+          test -n "$EXE"
+          mkdir -p out
+          cp "$EXE" out/ps2EntryRunner.exe
+          x86_64-w64-mingw32-objdump -p out/ps2EntryRunner.exe | grep "DLL Name" | sort -u || true
+          ls -lh out/
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps2EntryRunner-mingw-x64-${{ steps.elf.outputs.flavor }}-${{ github.sha }}
+          path: out/ps2EntryRunner.exe
+          if-no-files-found: error
+          retention-days: 14
