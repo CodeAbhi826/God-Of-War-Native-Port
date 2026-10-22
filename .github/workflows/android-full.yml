@@ -7,6 +7,16 @@ name: android-full-usa
 
 on:
   workflow_dispatch:
+    inputs:
+      flavor:
+        description: "Guest ELF region (auto picks USA if present)"
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - usa
+          - pal
 
 concurrency:
   group: android-full-usa-${{ github.ref }}
@@ -50,20 +60,22 @@ jobs:
           FLAVOR=""
           OVERRIDES=""
           TOML=""
-          if [ -f builder/game/SCUS_973.99 ]; then
+          REQUESTED="${{ inputs.flavor }}"
+          if [ -z "$REQUESTED" ]; then REQUESTED=auto; fi
+          if [ "$REQUESTED" != "pal" ] && [ -f builder/game/SCUS_973.99 ]; then
             ELF=builder/game/SCUS_973.99
             SERIAL=SCUS_973.99
             FLAVOR=usa
             OVERRIDES=overrides-usa
             TOML=gow-usa.toml
-          elif [ -f builder/game/SCES_531.33 ]; then
+          elif [ "$REQUESTED" != "usa" ] && [ -f builder/game/SCES_531.33 ]; then
             ELF=builder/game/SCES_531.33
             SERIAL=SCES_531.33
             FLAVOR=pal
             OVERRIDES=overrides
             TOML=gow.toml
           else
-            echo "::error::No ELF in the private builder. Upload your own dump first."
+            echo "::error::Requested guest ELF is not in the private builder. Upload your own dump first."
             exit 1
           fi
           echo "path=$ELF" >> "$GITHUB_OUTPUT"
