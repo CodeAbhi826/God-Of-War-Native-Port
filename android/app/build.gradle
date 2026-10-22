@@ -7,11 +7,25 @@ def ps2xBootElf = project.findProperty('ps2xBootElf')
         ?: '/storage/emulated/0/Android/data/com.ps2x.runner/files/boot.elf'
 // Set for a private full build, e.g. -Pps2xGameSerial=SCES_531.33. Empty accepts PAL or USA.
 def ps2xGameSerial = project.findProperty('ps2xGameSerial') ?: ''
+// Version overrides for CI/releases: -Pps2xVersionCode=3 -Pps2xVersionName=0.2.1
+def ps2xVersionCode = (project.findProperty('ps2xVersionCode') ?: '2').toInteger()
+def ps2xVersionName = project.findProperty('ps2xVersionName') ?: '0.2.0'
+def gitSha = 'unknown'
+try {
+    gitSha = providers.exec {
+        commandLine 'git', 'rev-parse', '--short', 'HEAD'
+    }.standardOutput.asText.get().trim()
+} catch (Exception ignored) {
+}
 
 android {
     namespace 'com.ps2x.runner'
     compileSdk 34
     ndkVersion '28.2.13676358'
+
+    buildFeatures {
+        buildConfig true
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -22,8 +36,9 @@ android {
         applicationId 'com.ps2x.runner'
         minSdk 28
         targetSdk 34
-        versionCode 1
-        versionName '0.1.0'
+        versionCode ps2xVersionCode
+        versionName ps2xVersionName
+        buildConfigField 'String', 'BUILD_SHA', "\"${gitSha}\""
 
         externalNativeBuild {
             cmake {

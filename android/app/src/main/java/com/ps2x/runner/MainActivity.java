@@ -111,6 +111,14 @@ public final class MainActivity extends Activity {
         note.setPadding(0, pad, 0, 0);
         root.addView(note);
 
+        TextView version = new TextView(this);
+        version.setText("v" + BuildConfig.VERSION_NAME + " \u00b7 " + BuildConfig.BUILD_SHA);
+        version.setTextColor(0xFF606068);
+        version.setTextSize(11);
+        version.setGravity(Gravity.CENTER);
+        version.setPadding(0, pad / 2, 0, 0);
+        root.addView(version);
+
         setContentView(root);
     }
 
