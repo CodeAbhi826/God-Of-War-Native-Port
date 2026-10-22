@@ -447,6 +447,44 @@ namespace GSMem
         }
     }
 
+    namespace
+    {
+        template<typename Writer>
+        void writeRunWrapped(u32 rowStart, u32 rowEnd, u32 x, u32 y, u32 count, Writer writer)
+        {
+            for (u32 i = 0; i < count; ++i)
+            {
+                if (x >= rowEnd)
+                {
+                    x = rowStart;
+                    ++y;
+                }
+                writer(x, y, i);
+                ++x;
+            }
+        }
+    }
+
+    void WriteRunCT32(u8* data, u32 bp, u32 bw, u32 rowStart, u32 rowEnd, u32 x, u32 y, const u8* src, u32 count)
+    {
+        writeRunWrapped(rowStart, rowEnd, x, y, count, [&](u32 px, u32 py, u32 i)
+        {
+            u32 value;
+            std::memcpy(&value, src + i * 4u, sizeof(value));
+            WriteCT32(data, bp, bw, px, py, value);
+        });
+    }
+
+    void WriteRunZ32(u8* data, u32 bp, u32 bw, u32 rowStart, u32 rowEnd, u32 x, u32 y, const u8* src, u32 count)
+    {
+        writeRunWrapped(rowStart, rowEnd, x, y, count, [&](u32 px, u32 py, u32 i)
+        {
+            u32 value;
+            std::memcpy(&value, src + i * 4u, sizeof(value));
+            WriteZ32(data, bp, bw, px, py, value);
+        });
+    }
+
     u32 ReadCT32(u8* data, u32 bp, u32 bw, u32 x, u32 y)
     {
         return PixelStorageTraits<C32>::Read(PageTableC32, data, bp, bw, x, y);
