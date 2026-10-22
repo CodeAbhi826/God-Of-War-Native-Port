@@ -97,19 +97,24 @@ jobs:
           cp builder/port-usa/gow-usa.toml src/port/gow-usa.toml
           cp builder/port-usa/functions-usa.csv src/port/functions-usa.csv
 
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Build ps2_recomp
         shell: bash
         working-directory: src
         run: |
           set -euo pipefail
-          cmake -S . -B recomp-build \
+          cmake -S . -B recomp-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DPS2X_BUILD_RECOMP=ON \
             -DPS2X_BUILD_RUNTIME=OFF \
             -DPS2X_BUILD_ANALYZER=OFF \
             -DPS2X_BUILD_TEST=OFF \
             -DPS2X_BUILD_STUDIO=OFF
-          cmake --build recomp-build --config Release --target ps2_recomp --parallel
+          cmake --build recomp-build --target ps2_recomp --parallel 4
 
       - name: Recompile guest ELF
         shell: bash
@@ -149,7 +154,7 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
-          cmake -S . -B pc-build \
+          cmake -S . -B pc-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_DEFAULT_CMP0091=NEW \
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded \
@@ -160,8 +165,9 @@ jobs:
             -DPS2X_BUILD_STUDIO=OFF \
             -DPS2X_ENABLE_DEBUG_UI=OFF \
             -DPS2X_SHOW_WINDOWS_CONSOLE=ON \
-            -DPS2X_DESKTOP_PORTABLE=ON
-          cmake --build pc-build --config Release --target ps2EntryRunner --parallel
+            -DPS2X_DESKTOP_PORTABLE=ON \
+            -DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=16
+          cmake --build pc-build --target ps2EntryRunner --parallel 4
 
       - name: Collect executable
         shell: bash
