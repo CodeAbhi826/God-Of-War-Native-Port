@@ -382,6 +382,30 @@ namespace GSMem
         }
     }
 
+    void ReadRowCT32(u8* data, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out)
+    {
+        for (u32 i = 0; i < count; ++i)
+        {
+            const u32 value = ReadCT32(data, bp, bw, x + i, y);
+            std::memcpy(out + i * 4u, &value, sizeof(value));
+        }
+    }
+
+    void ReadRowZ32(u8* data, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out)
+    {
+        for (u32 i = 0; i < count; ++i)
+        {
+            const u32 value = ReadZ32(data, bp, bw, x + i, y);
+            std::memcpy(out + i * 4u, &value, sizeof(value));
+        }
+    }
+
+    void ReadRowP8(u8* data, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out)
+    {
+        for (u32 i = 0; i < count; ++i)
+            out[i] = static_cast<u8>(ReadP8(data, bp, bw, x + i, y));
+    }
+
     void ReadIndexRun(const u8* data, u32 psm, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out)
     {
         switch (static_cast<PixelStorageMode>(psm & 0x3Fu))

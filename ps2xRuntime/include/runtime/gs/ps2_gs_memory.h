@@ -573,6 +573,12 @@ namespace GSMem
 	// (exclusive) and continues at rowStart on the next row.
 	void WriteRunCT32(u8* data, u32 bp, u32 bw, u32 rowStart, u32 rowEnd, u32 x, u32 y, const u8* src, u32 count);
 	void WriteRunZ32(u8* data, u32 bp, u32 bw, u32 rowStart, u32 rowEnd, u32 x, u32 y, const u8* src, u32 count);
+	// Reads one row of whole 32-bit pixels as RGBA bytes (the raw GS word),
+	// or one row of 8-bit indices. x is the first pixel, count the length.
+	void ReadRowCT32(u8* data, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out);
+	void ReadRowZ32(u8* data, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out);
+	void ReadRowP8(u8* data, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out);
+
 	// Reads `count` pixels of one row of a paletted format (T8/T8H/T4/T4HL/T4HH) as 8 bit indices.
 	void ReadIndexRun(const u8* data, u32 psm, u32 bp, u32 bw, u32 x, u32 y, u32 count, u8* out);
 	// Reads `count` pixels of one row of a direct-colour or depth format (32/24/16 bit) as raw values (24 bit masked,
