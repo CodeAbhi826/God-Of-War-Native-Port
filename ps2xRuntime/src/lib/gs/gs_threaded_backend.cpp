@@ -112,6 +112,11 @@ std::unique_ptr<GSRasterBackend> GSThreadedBackend::MakeDefault()
         // offscreen driver gives SDL_GPU a Vulkan device without a window.
         setenv("SDL_VIDEO_DRIVER", "offscreen", 0);
         SDL_SetMainReady();
+        // SDL_InitMainThread asks Android for the package name unless the app
+        // metadata is supplied as hints. NativeActivity has no SDLActivity
+        // Java class, so the JNI lookup would dereference a null JNIEnv.
+        SDL_SetHint(SDL_HINT_APP_NAME, "PS2X");
+        SDL_SetHint(SDL_HINT_APP_ID, "com.ps2x.runner");
         std::string error;
         auto sdlgpu = dq8::gfx::createSdlGpuBackend(error);
         if (sdlgpu)

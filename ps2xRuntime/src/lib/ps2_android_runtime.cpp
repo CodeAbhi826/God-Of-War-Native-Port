@@ -40,6 +40,20 @@ void ps2AndroidVkProbe()
     instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceInfo.pApplicationInfo = &applicationInfo;
 
+    uint32_t instanceExtensionCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, nullptr);
+    std::vector<VkExtensionProperties> instanceExtensions(instanceExtensionCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data());
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "instance extensions: %u", instanceExtensionCount);
+    for (const VkExtensionProperties &extension : instanceExtensions)
+    {
+        const bool interesting =
+            std::strstr(extension.extensionName, "surface") != nullptr ||
+            std::strstr(extension.extensionName, "headless") != nullptr;
+        if (interesting)
+            __android_log_print(ANDROID_LOG_INFO, kLogTag, "  %s (rev %u)", extension.extensionName, extension.specVersion);
+    }
+
     VkInstance instance = VK_NULL_HANDLE;
     const VkResult instanceResult = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instanceResult != VK_SUCCESS)
@@ -130,6 +144,8 @@ void ps2AndroidSdlGpuProbe()
 {
     SDL_SetMainReady();
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+    SDL_SetHint(SDL_HINT_APP_NAME, "PS2X");
+    SDL_SetHint(SDL_HINT_APP_ID, "com.ps2x.runner");
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
     {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "SDL_InitSubSystem(video) failed: %s", SDL_GetError());
@@ -152,6 +168,23 @@ void ps2AndroidSdlGpuProbe()
         const char *name = SDL_GetStringProperty(props, SDL_PROP_GPU_DEVICE_NAME_STRING, "(unknown)");
         const char *driver = SDL_GetStringProperty(props, SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING, "(unknown)");
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL GPU device: %s (%s)", name, driver);
+    }
+    SDL_Window *window = SDL_CreateWindow("ps2x-sdl-probe", 640, 448, 0);
+    if (!window)
+    {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "SDL_CreateWindow failed: %s", SDL_GetError());
+    }
+    else
+    {
+        __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL window created");
+        if (!SDL_ClaimWindowForGPUDevice(device, window))
+            __android_log_print(ANDROID_LOG_ERROR, kLogTag, "SDL_ClaimWindowForGPUDevice failed: %s", SDL_GetError());
+        else
+        {
+            __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL window claimed by GPU device");
+            SDL_ReleaseWindowFromGPUDevice(device, window);
+        }
+        SDL_DestroyWindow(window);
     }
     SDL_DestroyGPUDevice(device);
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
