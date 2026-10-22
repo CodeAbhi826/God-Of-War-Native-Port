@@ -9,6 +9,7 @@
 #include <android/log.h>
 #include <vulkan/vulkan.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -127,6 +128,7 @@ void ps2AndroidVkProbe()
 
 void ps2AndroidSdlGpuProbe()
 {
+    SDL_SetMainReady();
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
     {

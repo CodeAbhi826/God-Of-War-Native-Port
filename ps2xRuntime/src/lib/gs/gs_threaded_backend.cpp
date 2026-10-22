@@ -18,6 +18,10 @@
 #include <cstring>
 #include <cstdio>
 #include <string>
+#if defined(__ANDROID__)
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#endif
 #if defined(USE_SSE2NEON)
 #include "sse2neon.h"
 #else
@@ -102,17 +106,30 @@ GSThreadedBackend::~GSThreadedBackend()
 std::unique_ptr<GSRasterBackend> GSThreadedBackend::MakeDefault()
 {
 #if defined(__ANDROID__)
-    // GOW-Port: bring-up switch while the Vulkan renderer is being implemented.
-    // The OpenGL renderer has no Android context, so the CPU rasteriser is the
-    // only path that can produce frames on the device today.
-    if (androidCpuGsRequested())
+    if (!androidCpuGsRequested())
     {
-        std::fprintf(stderr, "[gs] Android CPU fallback selected\n");
-        return std::make_unique<GSThreadedBackend>(std::make_unique<GSCpuBackend>());
+        // SDL's Android video driver would try to own the NativeActivity. The
+        // offscreen driver gives SDL_GPU a Vulkan device without a window.
+        setenv("SDL_VIDEO_DRIVER", "offscreen", 0);
+        SDL_SetMainReady();
+        std::string error;
+        auto sdlgpu = dq8::gfx::createSdlGpuBackend(error);
+        if (sdlgpu)
+        {
+            // 1x native resolution first: the A20's Mali-G71 is fill-rate bound.
+            sdlgpu->setResolutionScale(1);
+            std::fprintf(stderr, "[gs] Android SDL3 GPU/Vulkan backend selected (%s)\n",
+                         sdlgpu->driverName().c_str());
+            return std::make_unique<GSThreadedBackend>(std::move(sdlgpu));
+        }
+        std::fprintf(stderr, "[gs] Android SDL3 GPU backend unavailable: %s\n", error.c_str());
     }
-#endif
+    std::fprintf(stderr, "[gs] Android CPU fallback selected\n");
+    return std::make_unique<GSThreadedBackend>(std::make_unique<GSCpuBackend>());
+#else
     // GOW-Port: the native render-target renderer is the only GS renderer (no VRAM-emulating rasteriser).
     return std::make_unique<GSThreadedBackend>(std::make_unique<GSHwBackend>());
+#endif
 }
 
 void GSThreadedBackend::SetEnabledByDefault(bool enabled)
