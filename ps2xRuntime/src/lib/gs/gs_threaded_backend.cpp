@@ -135,6 +135,14 @@ std::unique_ptr<GSRasterBackend> GSThreadedBackend::MakeDefault()
     return std::make_unique<GSThreadedBackend>(std::make_unique<GSCpuBackend>());
 #else
     // GOW-Port: the native render-target renderer is the only GS renderer (no VRAM-emulating rasteriser).
+    // PS2X_GS_BACKEND=cpu lets a desktop (in particular a headless Linux CI) boot
+    // without an OpenGL context; PS2X_GS_BACKEND=hw is the default.
+    const char *backendEnv = std::getenv("PS2X_GS_BACKEND");
+    if (backendEnv != nullptr && (backendEnv[0] == 'c' || backendEnv[0] == 'C'))
+    {
+        std::fprintf(stderr, "[gs] desktop CPU GS backend selected (PS2X_GS_BACKEND=cpu)\n");
+        return std::make_unique<GSThreadedBackend>(std::make_unique<GSCpuBackend>());
+    }
     return std::make_unique<GSThreadedBackend>(std::make_unique<GSHwBackend>());
 #endif
 }

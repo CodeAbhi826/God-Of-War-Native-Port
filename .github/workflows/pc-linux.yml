@@ -1,0 +1,215 @@
+name: pc-linux
+
+# Native Linux reference build: compiles the same recompiled PAL/USA guest code
+# into a ps2EntryRunner ELF on an Ubuntu runner (GCC). This is the desktop
+# target used for debugging: no Wine, real gdb/ASAN/TSAN, real terminal logs and
+# a native OpenGL/Vulkan context on the user's Intel GPU.
+#
+# The public repository has no game data: the guest ELF comes from the private
+# builder repository, the generated C++ is produced on the runner and only the
+# final executable is kept as a temporary artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: "Guest ELF region (auto picks USA if present)"
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - usa
+          - pal
+
+concurrency:
+  group: pc-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: desktop linux x64 (GCC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout public android branch
+        uses: actions/checkout@v4
+        with:
+          ref: android
+          path: src
+
+      - name: Checkout public port map
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: public-main
+
+      - name: Checkout private builder (ELF only)
+        uses: actions/checkout@v4
+        with:
+          repository: CodeAbhi826/gow-engine-builder
+          ssh-key: ${{ secrets.PRIVATE_BUILDER_DEPLOY_KEY }}
+          path: builder
+
+      - name: Locate guest ELF
+        id: elf
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELF=""
+          SERIAL=""
+          FLAVOR=""
+          OVERRIDES=""
+          TOML=""
+          REQUESTED="${{ inputs.flavor }}"
+          if [ -z "$REQUESTED" ]; then REQUESTED=auto; fi
+          if [ "$REQUESTED" != "pal" ] && [ -f builder/game/SCUS_973.99 ]; then
+            ELF=builder/game/SCUS_973.99
+            SERIAL=SCUS_973.99
+            FLAVOR=usa
+            OVERRIDES=overrides-usa
+            TOML=gow-usa.toml
+          elif [ "$REQUESTED" != "usa" ] && [ -f builder/game/SCES_531.33 ]; then
+            ELF=builder/game/SCES_531.33
+            SERIAL=SCES_531.33
+            FLAVOR=pal
+            OVERRIDES=overrides
+            TOML=gow.toml
+          else
+            echo "::error::Requested guest ELF is not in the private builder."
+            exit 1
+          fi
+          echo "path=$ELF" >> "$GITHUB_OUTPUT"
+          echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
+          echo "flavor=$FLAVOR" >> "$GITHUB_OUTPUT"
+          echo "overrides=$OVERRIDES" >> "$GITHUB_OUTPUT"
+          echo "toml=$TOML" >> "$GITHUB_OUTPUT"
+          ls -l "$ELF"
+
+      - name: Copy port map and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a public-main/port src/port
+          cp -a public-main/tools src/tools
+          cp builder/port-usa/gow-usa.toml src/port/gow-usa.toml
+          cp builder/port-usa/functions-usa.csv src/port/functions-usa.csv
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build pkg-config ccache \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libxkbcommon-dev libwayland-dev libasound2-dev
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-pc-linux
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/recomp-build/_deps
+            src/pc-build/_deps
+          key: ${{ runner.os }}-deps-${{ hashFiles('src/ps2xRuntime/CMakeLists.txt', 'src/ps2xRecomp/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-
+
+      - name: Build ps2_recomp
+        shell: bash
+        working-directory: src
+        env:
+          CCACHE_BASEDIR: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          cmake -S . -B recomp-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPS2X_BUILD_RECOMP=ON \
+            -DPS2X_BUILD_RUNTIME=OFF \
+            -DPS2X_BUILD_ANALYZER=OFF \
+            -DPS2X_BUILD_TEST=OFF \
+            -DPS2X_BUILD_STUDIO=OFF
+          cmake --build recomp-build --target ps2_recomp --parallel 4
+
+      - name: Recompile guest ELF
+        shell: bash
+        working-directory: src
+        run: |
+          set -euo pipefail
+          mkdir -p disc
+          cp "../${{ steps.elf.outputs.path }}" "disc/${{ steps.elf.outputs.serial }}"
+          rm -rf port/output
+          TOML="port/${{ steps.elf.outputs.toml }}"
+          test -f "$TOML"
+          RECOMP="$(find recomp-build -maxdepth 1 -type f -name ps2_recomp | head -n 1)"
+          test -n "$RECOMP"
+          ./"$RECOMP" "$TOML" | tee recomp.log
+          test -f port/output/register_functions.cpp
+          echo "generated sources: $(find port/output -maxdepth 1 -name '*.cpp' | wc -l)"
+          tail -n 20 recomp.log
+
+      - name: Sync generated code into the runner
+        shell: bash
+        working-directory: src
+        run: |
+          set -euo pipefail
+          rm -f ps2xRuntime/src/runner/*.cpp
+          cp port/output/*.cpp ps2xRuntime/src/runner/
+          if compgen -G "port/output/*.h" > /dev/null; then
+            cp port/output/*.h ps2xRuntime/include/
+          fi
+          cp port/${{ steps.elf.outputs.overrides }}/*.cpp ps2xRuntime/src/runner/
+          cp port/switch/gow_gs_replay.h ps2xRuntime/include/
+          cp ../builder/helpers/gow_pad2_packet.h ps2xRuntime/include/
+          find ps2xRuntime/src/runner -maxdepth 1 -name '*.cpp' | wc -l
+          ls -l ps2xRuntime/src/runner/register_functions.cpp
+
+      - name: Build desktop runner
+        shell: bash
+        working-directory: src
+        env:
+          CCACHE_BASEDIR: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          cmake -S . -B pc-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPS2X_BUILD_RECOMP=OFF \
+            -DPS2X_BUILD_RUNTIME=ON \
+            -DPS2X_BUILD_ANALYZER=OFF \
+            -DPS2X_BUILD_TEST=OFF \
+            -DPS2X_BUILD_STUDIO=OFF \
+            -DPS2X_ENABLE_DEBUG_UI=OFF \
+            -DPS2X_DESKTOP_PORTABLE=ON \
+            -DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=16
+          cmake --build pc-build --target ps2EntryRunner --parallel 4
+
+      - name: Collect executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$(find src/pc-build -maxdepth 3 -type f -name ps2EntryRunner | head -n 1)"
+          test -n "$EXE"
+          mkdir -p out
+          cp "$EXE" out/ps2EntryRunner
+          ls -lh out/
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps2EntryRunner-linux-x64-${{ steps.elf.outputs.flavor }}-${{ github.sha }}
+          path: out/ps2EntryRunner
+          if-no-files-found: error
+          retention-days: 14
