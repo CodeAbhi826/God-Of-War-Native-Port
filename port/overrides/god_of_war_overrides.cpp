@@ -18,6 +18,10 @@
 void sub_00175B48_0x175b48(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime);
 void sub_00175B88_0x175b88(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime);
 
+// Movie skip: the game loads FMV via 0x1894E0 (movie init). GOW_SKIP_FMV=1
+// bypasses it by clearing the movie state and returning early, like the USA port.
+void sub_001894E0_0x1894e0(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime);
+
 namespace
 {
     // The game's own allocator (heap created at 0x138CB0) owns all RAM from the end of .bss up to
@@ -58,6 +62,19 @@ namespace
         writeGuest32(rdram, GPR_U32(ctx, 7), 1u);
         SET_GPR_U32(ctx, 2, 0x40001000u);
         ctx->pc = GPR_U32(ctx, 31);
+    }
+
+    // PAL equivalent of USA's GOW_SKIP_FMV: skip FMV/movie loading at 0x1894E0.
+    // The movie state lives at 0x29C838 (idle=0, loading=10, playing=11).
+    // We clear it and return 0 so the game thinks the movie "finished" instantly.
+    void gowSkipMovieLoad(uint8_t *rdram, R5900Context *ctx, PS2Runtime *)
+    {
+        std::fprintf(stderr, "[gow-fmv] skipped via GOW_SKIP_FMV\n");
+        // Movie state address (same as USA: 0x29C838)
+        writeGuest32(rdram, 0x0029C838u, 0u);
+        writeGuest32(rdram, 0x0029C870u, 0u);
+        writeGuest32(rdram, 0x0029C840u, 0u);
+        gowReturnU32(ctx, 0u);
     }
 
     // ---------------------------------------------------------------------------
@@ -166,6 +183,13 @@ namespace
             std::fprintf(stderr, "[gow-override] pal: sceCdReadDvdDualInfo address not mapped\n");
         if (!runtime.replaceFunction(0x00299928u, gowLoadStartModuleBuffer))
             std::fprintf(stderr, "[gow-override] pal: sceSifLoadStartModuleBuffer address not mapped\n");
+
+        // Optional FMV bypass (GOW_SKIP_FMV=1) at PAL movie init 0x1894E0.
+        if (const char *skip = std::getenv("GOW_SKIP_FMV"); skip && std::strcmp(skip, "1") == 0)
+        {
+            if (!runtime.replaceFunction(0x001894E0u, gowSkipMovieLoad))
+                std::fprintf(stderr, "[gow-override] pal: movie skip 0x001894E0 not mapped\n");
+        }
     }
 }
 
