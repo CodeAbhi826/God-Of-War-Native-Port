@@ -152,8 +152,9 @@ jobs:
           rm -rf port/output
           TOML="port/${{ steps.elf.outputs.toml }}"
           test -f "$TOML"
-          RECOMP="$(find recomp-build -maxdepth 1 -type f -name ps2_recomp | head -n 1)"
+          RECOMP="$(find recomp-build -type f -name ps2_recomp | head -n 1)"
           test -n "$RECOMP"
+          echo "recompiler: $RECOMP"
           ./"$RECOMP" "$TOML" | tee recomp.log
           test -f port/output/register_functions.cpp
           echo "generated sources: $(find port/output -maxdepth 1 -name '*.cpp' | wc -l)"
@@ -200,7 +201,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXE="$(find src/pc-build -maxdepth 3 -type f -name ps2EntryRunner | head -n 1)"
+          EXE="$(find src/pc-build -type f -name ps2EntryRunner | head -n 1)"
           test -n "$EXE"
           mkdir -p out
           cp "$EXE" out/ps2EntryRunner
