@@ -2609,6 +2609,29 @@ void PS2Runtime::HandleIntegerOverflow(R5900Context *ctx)
 
 void PS2Runtime::run()
 {
+    ps2x::log::init();
+    ps2x::log::set_hang_report_hook([this]()
+                                    {
+        std::ostringstream out;
+        const std::uint32_t pc = m_debugPc.load(std::memory_order_relaxed);
+        const std::uint32_t ra = m_debugRa.load(std::memory_order_relaxed);
+        const std::uint32_t sp = m_debugSp.load(std::memory_order_relaxed);
+        const std::uint32_t gp = m_debugGp.load(std::memory_order_relaxed);
+        out << "  guest pc=0x" << std::hex << pc << " ra=0x" << ra << " sp=0x" << sp
+            << " gp=0x" << gp << std::dec << "\n";
+        out << "  dma=" << m_memory.dmaStartCount() << " gif=" << m_memory.gifCopyCount()
+            << " gsw=" << m_memory.gsWriteCount() << " vif=" << m_memory.vifWriteCount() << "\n";
+        const auto snapshot = m_eeScheduler->snapshot();
+        out << "  ee threads=" << snapshot.threads.size() << " running=" << snapshot.runningThreadId << "\n";
+        for (const auto &thread : snapshot.threads)
+        {
+            out << "    id=" << thread.id << " status=" << static_cast<int>(thread.status)
+                << " wait=" << static_cast<int>(thread.waitReason) << " waitId=" << thread.waitId
+                << " prio=" << thread.currentPriority << " pc=0x" << std::hex << thread.pc
+                << " ra=0x" << thread.ra << " sp=0x" << thread.sp << " entry=0x" << thread.entry
+                << std::dec << "\n";
+        }
+        return out.str(); });
     m_stopRequested.store(false, std::memory_order_relaxed);
     ps2_stubs::resetSifState();
     resetIop();
@@ -2654,8 +2677,19 @@ void PS2Runtime::run()
         gameThreadFinished.store(true, std::memory_order_release); });
 
     uint64_t tick = 0;
+    uint32_t lastStallPc = 0xffffffffu;
+    uint64_t stallTicks = 0;
+    int stallLimit = 30;
+    if (const char *stallEnv = std::getenv("PS2X_STALL_TICKS"))
+    {
+        const int parsed = std::atoi(stallEnv);
+        if (parsed > 0)
+            stallLimit = parsed;
+    }
+    bool stallReported = false;
     while (!isStopRequested() && !gameThreadFinished.load(std::memory_order_acquire))
     {
+        ps2x::log::heartbeat();
         PS2_IF_AGRESSIVE_LOGS({
             tick++;
             if ((tick % 120) == 0)
@@ -2685,6 +2719,25 @@ void PS2Runtime::run()
                                                << " gsw=" << curGs
                                                << " vif=" << curVif
                                                << std::endl);
+
+                // GOW-Port: aviso automatico si el PC del hilo invitado deja de avanzar.
+                if (dbgPc == lastStallPc)
+                {
+                    ++stallTicks;
+                }
+                else
+                {
+                    lastStallPc = dbgPc;
+                    stallTicks = 0;
+                    stallReported = false;
+                }
+                if (!stallReported && stallLimit > 0 && stallTicks >= static_cast<uint64_t>(stallLimit))
+                {
+                    stallReported = true;
+                    PS2X_LOG_CRITICAL(::ps2x::log::Cat::Ee,
+                                      "guest PC stalled at 0x" << std::hex << dbgPc << std::dec
+                                      << " for " << stallLimit << " samples; see [run:thread] and the last cd/map lines above");
+                }
 
                 // GOW-Port: estado de cada hilo del EE (cada 600 marcas, ~10 s).
                 if ((tick % 600) == 0)

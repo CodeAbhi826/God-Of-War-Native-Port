@@ -1,6 +1,8 @@
 #ifndef PS2_LOG_H
 #define PS2_LOG_H
 
+#include "ps2x_log.h"
+
 #include <algorithm>
 #include <deque>
 #include <filesystem>
@@ -19,16 +21,21 @@
 #define AGRESSIVE_LOGS 0
 #endif
 
-#define RUNTIME_ERROR(x)                                                                                               \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        std::ostringstream _ps2_runtime_error_stream;                                                                  \
-        _ps2_runtime_error_stream << x;                                                                                \
-        const std::string _ps2_runtime_error_text =                                                                    \
-            _ps2_runtime_error_stream.str();                                                                           \
-                                                                                                                       \
-        std::cerr << _ps2_runtime_error_text;                                                                           \
-        ps2_log::append_runtime_log_text(_ps2_runtime_error_text);                                                      \
+// Both legacy macros now flow through the ps2x logger, so their level is
+// controlled at runtime (PS2X_LOG / PS2X_LOG_LEVEL / PS2X_LOG_CATS) instead of
+// at compile time. The in-app debug panel keeps reading the local ring below.
+#define RUNTIME_ERROR(x)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (::ps2x::log::should_log(::ps2x::log::Cat::Core, ::ps2x::log::Level::Error))            \
+        {                                                                                          \
+            std::ostringstream _ps2_runtime_error_stream;                                          \
+            _ps2_runtime_error_stream << x;                                                        \
+            const std::string _ps2_runtime_error_text = _ps2_runtime_error_stream.str();           \
+                                                                                                   \
+            ::ps2x::log::write(::ps2x::log::Level::Error, ::ps2x::log::Cat::Core, _ps2_runtime_error_text); \
+            ps2_log::append_runtime_log_text(_ps2_runtime_error_text);                              \
+        }                                                                                          \
     } while (0)
 
 namespace ps2_log
@@ -116,26 +123,25 @@ inline void clear_runtime_log_entries()
 }
 }
 
-#if PS2_RUNTIME_LOGS || AGRESSIVE_LOGS
-#define RUNTIME_LOG(x)                                                                                                  \
-    do                                                                                                                  \
-    {                                                                                                                   \
-        std::ostringstream _ps2_runtime_log_stream;                                                                     \
-        _ps2_runtime_log_stream << x;                                                                                   \
-        const std::string _ps2_runtime_log_text = _ps2_runtime_log_stream.str();                                        \
-        if (_ps2_runtime_log_text.empty())                                                                            \
-        {                                                                                                               \
-            std::cout.flush();                                                                                          \
-        }                                                                                                               \
-        else                                                                                                            \
-        {                                                                                                               \
-            std::cout << _ps2_runtime_log_text;                                                                         \
-            ps2_log::append_runtime_log_text(_ps2_runtime_log_text);                                                    \
-        }                                                                                                               \
+// Runtime-controlled: the level filter is applied inside ps2x::log. This keeps
+// the previous "informational" stream-style call sites intact while making the
+// output configurable without recompiling.
+#define RUNTIME_LOG(x)                                                                              \
+    do                                                                                              \
+    {                                                                                               \
+        if (::ps2x::log::should_log(::ps2x::log::Cat::Core, ::ps2x::log::Level::Info))              \
+        {                                                                                           \
+            std::ostringstream _ps2_runtime_log_stream;                                             \
+            _ps2_runtime_log_stream << x;                                                           \
+            const std::string _ps2_runtime_log_text = _ps2_runtime_log_stream.str();               \
+            if (!_ps2_runtime_log_text.empty())                                                     \
+            {                                                                                       \
+                ::ps2x::log::write(::ps2x::log::Level::Info, ::ps2x::log::Cat::Core,                \
+                                   _ps2_runtime_log_text);                                          \
+                ps2_log::append_runtime_log_text(_ps2_runtime_log_text);                            \
+            }                                                                                       \
+        }                                                                                           \
     } while (0)
-#else
-#define RUNTIME_LOG(x) do {} while(0)
-#endif
 
 #if AGRESSIVE_LOGS
 
