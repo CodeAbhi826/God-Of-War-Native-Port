@@ -1,6 +1,6 @@
 <div align="center">
 
-# God of War — Native Port
+# God of War: Recomp
 
 **A native PC port of *God of War* (PS2, NTSC-U `SCUS-97399`): the game's code is statically recompiled to C++, and
 the PS2 hardware it talked to is replaced by native code, not emulated.**
