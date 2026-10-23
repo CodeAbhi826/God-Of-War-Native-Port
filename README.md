@@ -23,6 +23,8 @@
 - [Project status](#project-status)
 - [Requirements](#requirements)
 - [Building from source](#building-from-source)
+- [Desktop build (PC/Linux)](#desktop-build-pclinux)
+- [Logging and diagnostics](#logging-and-diagnostics)
 - [Running on Android](#running-on-android)
 - [Repository layout](#repository-layout)
 - [Known issues and roadmap](#known-issues-and-roadmap)
@@ -145,6 +147,50 @@ gradle assembleRelease
 ```
 
 The APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
+
+## Desktop build (PC/Linux)
+
+The desktop runner (`ps2EntryRunner`) is the primary target while the boot path is being debugged: it is the
+same runtime and the same recompiled game code as Android, but it runs on a real PC with native logging,
+`gdb`, ASan/TSan and a native OpenGL/Vulkan context, and no emulator or Wine in the way.
+
+Two workflows build it from the same private-builder inputs:
+
+- **pc-windows** (MSVC, Windows) — the reference executable, `ps2EntryRunner.exe`;
+- **pc-linux** (GCC, Ubuntu) — `ps2EntryRunner` for Linux x64.
+
+Start one in **Actions** (choose `pal` for the European disc or `usa` for the American one) and download the
+artifact. The runner takes the guest ELF as the first argument and reads the disc image from `GOW_ISO`:
+
+```sh
+GOW_ISO=/path/to/godofwar.iso ./ps2EntryRunner /path/to/SCES_531.33
+```
+
+`PS2X_GS_BACKEND=cpu` boots through the CPU rasteriser, which is enough for the boot path and for logs; the
+native OpenGL backend (`gs_gl`) is the default on desktops with a GPU.
+
+## Logging and diagnostics
+
+The runtime has a level- and category-based logger. The legacy `RUNTIME_LOG`/`RUNTIME_ERROR` macros and the new
+`PS2X_LOG_*` macros all go through it, so verbosity is a runtime decision, not a compile-time one. Output goes
+to stderr, to a rotating file (`logs/ps2x.log`) and, on Android, to logcat under the `PS2X` tag.
+
+| Variable | Meaning |
+|---|---|
+| `PS2X_LOG` | shorthand: `off`, `all`, or a level name |
+| `PS2X_LOG_LEVEL` | default level: `trace`, `debug`, `info`, `warn`, `error`, `critical`, `off` |
+| `PS2X_LOG_CATS` | per-category levels, e.g. `ee:trace,cd:debug,gs:warn` |
+| `PS2X_LOG_FILE` / `PS2X_LOG_DIR` | explicit log file / directory |
+| `PS2X_LOG_MAX_MB` / `PS2X_LOG_FILES` | rotation size (8 MB) and number of files kept (10) |
+| `PS2X_LOG_CONSOLE` / `PS2X_LOG_FLUSH` | mirror to stderr (1) / flush after every line (0) |
+| `PS2X_HANG_MS` | hang watchdog: dump the guest state if the host makes no progress for this long |
+| `PS2X_CRASH_DUMP` | write `logs/ps2x.log.crash.log` on a fatal signal (1) |
+
+Categories: `core`, `ee`, `iop`, `sif`, `cd`, `gs`, `gs-hw`, `spu`, `pad`, `movie`, `map`, `recomp`,
+`override`, `host`, `fs`. `critical` lines are never filtered and are always flushed. The logger keeps an
+in-memory ring (the last 4096 lines) that survives a crash, and `PS2X_HANG_MS` makes a watchdog thread dump the
+guest PC/RA/SP, the DMA/GS counters and the EE thread table when the process stops making progress. Raise one
+category at a time with `PS2X_LOG_CATS` instead of turning everything to `trace`.
 
 ## Running on Android
 
