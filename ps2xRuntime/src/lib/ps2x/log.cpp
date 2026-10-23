@@ -250,7 +250,7 @@ void dump_crash_ring()
     if (g_signalFd < 0)
         return;
     const char *header = "\n=== PS2X CRASH: last log lines ===\n";
-    (void)!write(g_signalFd, header, std::strlen(header));
+    (void)!::write(g_signalFd, header, std::strlen(header));
     if (g_crashRing != nullptr)
     {
         const std::uint64_t written = g_crashWrite.load(std::memory_order_acquire);
@@ -264,11 +264,11 @@ void dump_crash_ring()
                 continue;
             const std::size_t n = bounded_len(slot.text, kCrashLineMax);
             if (n > 0)
-                (void)!write(g_signalFd, slot.text, n);
+                (void)!::write(g_signalFd, slot.text, n);
         }
     }
     const char *footer = "=== END PS2X CRASH ===\n";
-    (void)!write(g_signalFd, footer, std::strlen(footer));
+    (void)!::write(g_signalFd, footer, std::strlen(footer));
 }
 
 void crash_signal_handler(int sig)
