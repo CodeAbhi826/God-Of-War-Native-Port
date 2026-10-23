@@ -25,6 +25,9 @@ namespace ps2x::iop
             coreServices.emplace_back(detail::createDbcmanService(host));
             coreServices.emplace_back(detail::createLibSdService(host));
             coreServices.emplace_back(detail::createGow989SndService(host));
+            coreServices.emplace_back(detail::createGowSmpdService(host));
+            coreServices.emplace_back(detail::createGowMc2Service(host));
+            coreServices.emplace_back(detail::createGowDs2uService(host));
             refreshServiceModuleKeys();
             rebuildRoutes();
         }

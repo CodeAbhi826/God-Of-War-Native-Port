@@ -8,4 +8,7 @@ namespace ps2x::iop::detail
     std::unique_ptr<IopService> createLibSdService(IopHost &host);
     std::unique_ptr<IopService> createMcservService(IopHost &host);
     std::unique_ptr<IopService> createGow989SndService(IopHost &host);
+    std::unique_ptr<IopService> createGowSmpdService(IopHost &host);
+    std::unique_ptr<IopService> createGowMc2Service(IopHost &host);
+    std::unique_ptr<IopService> createGowDs2uService(IopHost &host);
 }

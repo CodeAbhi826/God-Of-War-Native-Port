@@ -85,4 +85,31 @@ namespace ps2x::iop::detail
             std::array<uint32_t, 2>{0x00123456u, 0x00123457u},
             std::array<std::string_view, 3>{"989nomid", "989snd", "989err"});
     }
-}
+
+    // SMPD IOP: módulo de streaming/películas (smpd_iop.irx).
+    // El juego lo carga después del splash SCEE; sin él, el hilo de películas
+    // nunca arranca y el juego se queda esperando en el mapa de recursos.
+    std::unique_ptr<IopService> createGowSmpdService(IopHost &host)
+    {
+        // SIDs típicos de servicios de streaming (los exactos los averiguaremos por log).
+        return std::make_unique<SilentService<2, 2>>(host, "smpd_iop", 0u,
+            std::array<uint32_t, 2>{0x00123458u, 0x00123459u},
+            std::array<std::string_view, 2>{"smpd_iop", "smpd"});
+    }
+
+    // Memory Card 2 driver (mc2_d.irx).
+    std::unique_ptr<IopService> createGowMc2Service(IopHost &host)
+    {
+        return std::make_unique<SilentService<2, 2>>(host, "mc2_d", 0u,
+            std::array<uint32_t, 2>{0x0012345Au, 0x0012345Bu},
+            std::array<std::string_view, 2>{"mc2_d", "mcserv"});
+    }
+
+    // DualShock 2 USB driver (ds2u_d.irx).
+    std::unique_ptr<IopService> createGowDs2uService(IopHost &host)
+    {
+        return std::make_unique<SilentService<2, 2>>(host, "ds2u_d", 0u,
+            std::array<uint32_t, 2>{0x0012345Cu, 0x0012345Du},
+            std::array<std::string_view, 2>{"ds2u_d", "ds2u"});
+    }
+} // namespace ps2x::iop::detail
