@@ -22,6 +22,22 @@ void sub_00175B88_0x175b88(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtim
 // bypasses it by clearing the movie state and returning early, like the USA port.
 void sub_001894E0_0x1894e0(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime);
 
+// ---------------------------------------------------------------------------
+// Helper: write a 32-bit value to guest RAM (with address masking).
+void writeGuest32(uint8_t *rdram, uint32_t addr, uint32_t value)
+{
+    if (addr == 0u)
+        return;
+    std::memcpy(rdram + (addr & 0x01FFFFFFu), &value, sizeof(value));
+}
+
+// Helper: set return register V0 and return to caller (RA).
+void gowReturnU32(R5900Context *ctx, uint32_t value)
+{
+    SET_GPR_U32(ctx, 2, value);
+    ctx->pc = GPR_U32(ctx, 31);
+}
+
 namespace
 {
     // The game's own allocator (heap created at 0x138CB0) owns all RAM from the end of .bss up to
@@ -34,13 +50,6 @@ namespace
 
     // First sector of layer 1 of the original DVD-9 (where the second layer starts).
     constexpr uint32_t kLayer1StartLbn = 2080544u;
-
-    void writeGuest32(uint8_t *rdram, uint32_t addr, uint32_t value)
-    {
-        if (addr == 0u)
-            return;
-        std::memcpy(rdram + (addr & 0x01FFFFFFu), &value, sizeof(value));
-    }
 
     // int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)
     // The stripped PAL ELF left this SDK stub unbound by signature; unbound it talks to cdvdfsv
@@ -104,12 +113,6 @@ namespace
     {
         static std::unordered_map<std::string, unsigned> counts;
         return ++counts[std::string(kind) + ":" + name];
-    }
-
-    void gowReturnU32(R5900Context *ctx, uint32_t value)
-    {
-        SET_GPR_U32(ctx, 2, value);
-        ctx->pc = GPR_U32(ctx, 31);
     }
 
     void gowMapContains(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
