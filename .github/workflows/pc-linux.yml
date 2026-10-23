@@ -120,9 +120,9 @@ jobs:
           path: |
             src/recomp-build/_deps
             src/pc-build/_deps
-          key: ${{ runner.os }}-deps-${{ hashFiles('src/ps2xRuntime/CMakeLists.txt', 'src/ps2xRecomp/CMakeLists.txt') }}
+          key: ${{ runner.os }}-deps-v2-${{ hashFiles('src/ps2xRuntime/CMakeLists.txt', 'src/ps2xRecomp/CMakeLists.txt') }}
           restore-keys: |
-            ${{ runner.os }}-deps-
+            ${{ runner.os }}-deps-v2-
 
       - name: Build ps2_recomp
         shell: bash
