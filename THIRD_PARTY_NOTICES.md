@@ -1,6 +1,6 @@
 # Third-party notices
 
-God of War Native Port is licensed under the GNU General Public License v3.0
+God of War: Recomp is licensed under the GNU General Public License v3.0
 (see `LICENSE`). The following components are included in, fetched by, or
 linked into the project. Each component keeps its own license; the license
 text shipped with the component governs.

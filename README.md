@@ -1,8 +1,8 @@
 <div align="center">
 
-# God of War Native Port
+# God of War: Recomp
 
-**An unofficial static recompilation of God of War (PlayStation 2, 2005) for Android**
+**An unofficial static recompilation of God of War (PlayStation 2, 2005) for PC/Linux and Android**
 
 [License: GPL-3.0](LICENSE) · [Releases](../../releases)
 
@@ -33,8 +33,8 @@
 
 ## Overview
 
-God of War Native Port translates the MIPS R5900 code of the PlayStation 2 executable of **God of War (2005)**
-into C++ ahead of time and compiles it into a native ARM64 Android application. There is no interpreter or JIT
+God of War: Recomp translates the MIPS R5900 code of the PlayStation 2 executable of **God of War (2005)**
+into C++ ahead of time and compiles it into native applications for PC/Linux and ARM64 Android. There is no interpreter or JIT
 for the game's EE code: the game's own instructions become native code, and the PS2 hardware around them is
 provided by a small runtime.
 
@@ -258,6 +258,6 @@ unofficial fan project; the original game and its trademarks belong to their res
 
 ## License
 
-God of War Native Port is free software, licensed under the
+God of War: Recomp is free software, licensed under the
 [GNU General Public License v3.0](LICENSE). Third-party components keep their own licenses, listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
