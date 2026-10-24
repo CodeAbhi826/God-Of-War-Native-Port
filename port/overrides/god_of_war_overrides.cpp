@@ -93,6 +93,10 @@ namespace
     // at 0x176AD0; the engine logs cannot say which name it is waiting for.
     // GOW_MAP_DIAG=1 answers "not found" without entering the lookup, so the caller
     // moves on and the names it requests are printed.
+    //
+    // GOW_MAP_POPULATE=1 returns a dummy non-zero pointer for known server names
+    // so the game can proceed past the registry lookup without a fully populated
+    // registry. The game just needs a non-zero pointer to proceed.
     // ---------------------------------------------------------------------------
     std::string gowReadGuestString(uint8_t *rdram, uint32_t addr, size_t maxLen = 64)
     {
@@ -115,6 +119,27 @@ namespace
         return ++counts[std::string(kind) + ":" + name];
     }
 
+    // Known server names that the game looks up after the SCEE splash.
+    // Return a dummy non-zero pointer so the game thinks the server exists.
+    static const std::unordered_set<std::string> kKnownServers = {
+        "Master_Server", "WadServer", "ProServer", "GOServer", "AnimServer",
+        "BhvrServer", "EvtServer", "CollisionServer", "ScriptServer",
+        "CameraServer", "WaypointServer", "EffectsServer", "LightServer",
+        "MatServer", "TextureServer", "GfxClutServer", "EmitterServer",
+        "SoundServer", "renMasterSvr", "renModelServer", "renParticleSvr",
+        "renFlashServer", "renLineServer", "renShadowServer", "renEEPrimSvr",
+        "renPrimMaster", "renSTriStripSvr", "renTriStripSvr", "renPtclPrimSvr",
+        "renLStripSvr", "renFlashPrimSvr", "EpiServer", "MAT_stencil",
+        "MAT_trail1", "HERO_HEAP_SIZE", "SLOT_HEAP_SIZE", "UPGRADE_HEAP_SIZE"
+    };
+
+    static uint32_t getDummyServerPtr(const std::string &name)
+    {
+        if (kKnownServers.find(name) != kKnownServers.end())
+            return 0x12345678u; // Any non-zero value the game accepts as a valid pointer
+        return 0u;
+    }
+
     void gowMapContains(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)
     {
         const uint32_t map = GPR_U32(ctx, 4);
@@ -126,6 +151,12 @@ namespace
         if (std::getenv("GOW_MAP_DIAG") != nullptr)
         {
             gowReturnU32(ctx, 0u);
+            return;
+        }
+        // If it's a known server, say "yes it exists" without calling the real function
+        if (getDummyServerPtr(name) != 0u)
+        {
+            gowReturnU32(ctx, 1u);
             return;
         }
         sub_00175B48_0x175b48(rdram, ctx, runtime);
@@ -142,6 +173,13 @@ namespace
         if (std::getenv("GOW_MAP_DIAG") != nullptr)
         {
             gowReturnU32(ctx, 0u);
+            return;
+        }
+        // If it's a known server, return a dummy pointer so the game proceeds
+        uint32_t dummy = getDummyServerPtr(name);
+        if (dummy != 0u)
+        {
+            gowReturnU32(ctx, dummy);
             return;
         }
         sub_00175B88_0x175b88(rdram, ctx, runtime);
